@@ -568,6 +568,13 @@ GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
 async def handle_ping(request):
     return web.Response(text="SchoolsByBot is running!")
 
+async def handle_models(request):
+    def get_m():
+        import requests
+        return requests.get(f"https://generativelanguage.googleapis.com/v1beta/models?key={GEMINI_KEY}", timeout=15)
+    r = await asyncio.to_thread(get_m)
+    return web.Response(text=r.text, content_type="application/json")
+
 async def handle_gemini_proxy(request):
     try:
         data = await request.json()
@@ -587,19 +594,32 @@ async def handle_gemini_proxy(request):
                 }
             })
 
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key={GEMINI_KEY}"
-        def call_g():
-            import requests
-            return requests.post(url, json={"contents": [{"parts": parts}]}, timeout=30)
+        models_to_try = [
+            "gemini-3.8-flash",
+            "gemini-2.5-flash",
+            "gemini-2.5-flash-lite",
+            "gemini-1.5-flash",
+            "gemini-2.0-flash-lite"
+        ]
 
-        resp = await asyncio.to_thread(call_g)
-        if resp.status_code == 200:
-            rj = resp.json()
-            candidates = rj.get("candidates", [])
-            if candidates:
-                ans = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-                return web.json_response({"ok": True, "answer": ans})
-        return web.json_response({"ok": False, "error": resp.text}, status=resp.status_code)
+        last_error = ""
+        for m in models_to_try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={GEMINI_KEY}"
+            def call_g(u=url):
+                import requests
+                return requests.post(u, json={"contents": [{"parts": parts}]}, timeout=20)
+
+            resp = await asyncio.to_thread(call_g)
+            if resp.status_code == 200:
+                rj = resp.json()
+                candidates = rj.get("candidates", [])
+                if candidates:
+                    ans = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                    return web.json_response({"ok": True, "answer": ans})
+            else:
+                last_error = resp.text
+
+        return web.json_response({"ok": False, "error": last_error}, status=503)
     except Exception as e:
         return web.json_response({"ok": False, "error": str(e)}, status=500)
 
@@ -626,6 +646,7 @@ async def start_web_server():
     app.router.add_get("/", handle_ping)
     app.router.add_get("/health", handle_ping)
     app.router.add_get("/probe", handle_probe)
+    app.router.add_get("/api/models", handle_models)
     app.router.add_post("/api/gemini", handle_gemini_proxy)
     runner = web.AppRunner(app)
     await runner.setup()
