@@ -16,9 +16,21 @@ def is_draw_request(text: str) -> bool:
         return True
     return False
 
+def translate_ru_to_en(text: str) -> str:
+    """Быстрый перевод на английский для нейросети FLUX (нейросети понимают только English)"""
+    try:
+        url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t&q={urllib.parse.quote(text)}"
+        r = requests.get(url, timeout=4)
+        if r.status_code == 200:
+            return "".join([part[0] for part in r.json()[0]])
+    except Exception as e:
+        logger.warning(f"Translation error: {e}")
+    return text
+
 def generate_image_pollinations(prompt: str) -> Tuple[bool, Optional[bytes], str]:
     """
-    Генерирует изображение по тексту через Pollinations FLUX.
+    Генерирует высококачественное изображение через FLUX.1.
+    Переводит идею на английский и добавляет профессиональные параметры качества.
     Возвращает (success, image_bytes, clean_prompt_or_error)
     """
     clean = prompt.strip()
@@ -32,25 +44,30 @@ def generate_image_pollinations(prompt: str) -> Tuple[bool, Optional[bytes], str
         clean = re.sub(p, "", clean, flags=re.IGNORECASE).strip()
 
     if not clean:
-        clean = "милый пушистый котёнок в цветах, 3D мультфильм"
+        clean = "милый пушистый котёнок в цветах"
+
+    # 1. Переводим на английский (FLUX генерирует реалистично только по английскому промпту)
+    en_desc = translate_ru_to_en(clean)
+
+    # 2. Формируем профессиональный промпт для фотореализма и чётких линий (без кривизны)
+    flux_prompt = (
+        f"masterpiece, award-winning professional photography, {en_desc}, "
+        f"highly detailed, intricate details, realistic textures, volumetric natural lighting, "
+        f"sharp focus, cinematic composition, 8k resolution, photorealistic"
+    )
 
     seed = random.randint(1, 9999999)
-    encoded = urllib.parse.quote(clean)
-    url = f"https://image.pollinations.ai/prompt/{encoded}?width=1024&height=1024&nologo=true&seed={seed}&model=flux"
+    encoded = urllib.parse.quote(flux_prompt)
+    url = f"https://image.pollinations.ai/prompt/{encoded}?model=flux&width=1024&height=1024&nologo=true&seed={seed}"
 
     try:
         resp = requests.get(url, timeout=35)
-        if resp.status_code == 200 and len(resp.content) > 1000:
+        if resp.status_code == 200 and len(resp.content) > 2000:
             return True, resp.content, clean
         elif resp.status_code == 402:
-            # Фолбэк на стандартную модель без seed
-            fallback_url = f"https://image.pollinations.ai/prompt/{encoded}?width=800&height=800&nologo=true"
-            fb = requests.get(fallback_url, timeout=30)
-            if fb.status_code == 200 and len(fb.content) > 1000:
-                return True, fb.content, clean
-            return False, None, "Художник немного занят (лимит 1 картинка в минуту). Попробуйте ещё раз через 30 секунд!"
+            return False, None, "⏳ Художник как раз смешивает краски (лимит 1 картинка в 45 сек). Отправьте запрос ещё раз через 15–20 секунд!"
         else:
-            return False, None, f"Ошибка генератора ({resp.status_code})"
+            return False, None, f"Ошибка генерации ({resp.status_code})"
     except Exception as e:
         logger.error(f"Image generation error: {e}")
-        return False, None, f"Ошибка соединения: {e}"
+        return False, None, f"Ошибка соединения с генератором: {e}"

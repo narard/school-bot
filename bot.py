@@ -583,10 +583,11 @@ async def handle_gemini_proxy(request):
         image_b64 = data.get("image_b64")
 
         prompt_prefix = (
-            "Ты дружелюбный, умный и всесторонний AI-помощник для всей семьи (живёшь в домашнем Telegram-боте семьи в Минске).\n"
+            "Ты умный, эрудированный, живой и интересный собеседник и персональный помощник.\n"
             "Правила:\n"
-            "1. Если вопрос школьный (для дочки 4 класса, 9-10 лет) — отвечай как добрый репетитор: понятно, пошагово, с наглядными примерами, без заумных терминов.\n"
-            "2. Если вопрос взрослый или общий (быт, кулинария, ремонт, переводы, наука, советы) — отвечай развёрнуто, точно и практично как умный эксперт.\n\n"
+            "- Отвечай естественно, по существу, без дешёвых шаблонных фраз вроде 'Привет! Замечательный вопрос...' и без сюсюканья.\n"
+            "- Если вопрос явно касается школьных уроков начальной школы — объясняй понятно, доброжелательно и пошагово.\n"
+            "- В остальных случаях — отвечай как взрослый, эрудированный эксперт: качественно, глубоко, с практической пользой и хорошим слогом.\n\n"
         )
         parts = [{"text": f"{prompt_prefix}Вопрос: {question}"}]
         if image_b64:
@@ -598,13 +599,11 @@ async def handle_gemini_proxy(request):
             })
 
         models_to_try = [
-            "gemini-flash-lite-latest",
-            "gemini-2.5-flash-lite",
-            "gemini-flash-latest",
-            "gemini-2.5-flash",
-            "gemini-3.1-flash-lite",
+            "gemini-3.8-flash",
             "gemini-3.5-flash",
-            "gemini-3.8-flash"
+            "gemini-flash-latest",
+            "gemini-3.1-flash-lite",
+            "gemini-flash-lite-latest"
         ]
 
         errors = {}
@@ -614,7 +613,7 @@ async def handle_gemini_proxy(request):
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={key}"
                 def call_g(u=url):
                     import requests
-                    return requests.post(u, json={"contents": [{"parts": parts}]}, timeout=12)
+                    return requests.post(u, json={"contents": [{"parts": parts}]}, timeout=18)
 
                 try:
                     resp = await asyncio.to_thread(call_g)
