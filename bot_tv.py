@@ -15,6 +15,7 @@ from services.weather import format_weather_message
 from services.currency import format_currency_message
 from services.movies import get_random_movie, get_rezka_url
 from services.ai_helper import try_eval_math, ask_homework_tutor
+from services.image_gen import generate_image_pollinations, is_draw_request
 import asyncio
 
 logging.basicConfig(
@@ -73,15 +74,18 @@ def get_main_keyboard(has_multi_pupils: bool = False) -> types.ReplyKeyboardMark
     b2 = types.KeyboardButton("📆 Завтра")
     b3 = types.KeyboardButton("🗓 Вся неделя")
     b4 = types.KeyboardButton("📊 Четвертные оценки")
-    b5 = types.KeyboardButton("🌤 Погода")
-    b6 = types.KeyboardButton("💵 Курсы валют")
-    b7 = types.KeyboardButton("🎬 Кино на вечер")
-    b8 = types.KeyboardButton("💡 AI-помощник")
+    b5 = types.KeyboardButton("💡 AI-помощник")
+    b6 = types.KeyboardButton("🎨 Нарисовать")
+    b7 = types.KeyboardButton("🌤 Погода")
+    b8 = types.KeyboardButton("💵 Курсы валют")
+    b9 = types.KeyboardButton("🎬 Кино на вечер")
+    b10 = types.KeyboardButton("ℹ️ Справка")
     
     markup.add(b1, b2)
     markup.add(b3, b4)
     markup.add(b5, b6)
     markup.add(b7, b8)
+    markup.add(b9, b10)
     
     extra = []
     if has_multi_pupils:
@@ -415,13 +419,84 @@ def callback_film(call: types.CallbackQuery):
         pass
     bot.answer_callback_query(call.id)
 
+
+HELP_TEXT = (
+    "🌟 <b>Школьный Дневник СШ №199 — Инструкция и возможности</b>\n\n"
+    "📚 <b>ШКОЛЬНЫЙ ДНЕВНИК</b>\n"
+    "• <b>📅 Сегодня / 📆 Завтра / 🗓 Вся неделя:</b> расписание с точным временем уроков, полученными оценками и домашними заданиями.\n"
+    "• <b>📊 Четвертные оценки:</b> четвертные и годовые баллы по всем предметам.\n"
+    "• <b>🔔 Автоуведомления:</b> бот сам присылает прогноз погоды утром (06:40), ДЗ на завтра в 16:00 и мгновенно оповещает о новых оценках.\n\n"
+    "🧠 <b>УНИВЕРСАЛЬНЫЙ AI-ПОМОЩНИК (GEMINI)</b>\n"
+    "• <b>В личных сообщениях:</b> пишите любые вопросы прямо в чат обычным текстом — бот ответит на всё! От школьных задач и сочинений до рецептов, ремонта и советов.\n"
+    "• <b>По фото:</b> сфотографируйте страницу учебника или тетради — бот поймёт задание и распишет понятное пошаговое решение.\n"
+    "• <b>В семейном чате:</b> используйте команду <code>/ai ваш вопрос</code> или ответьте (Reply) на любое сообщение бота.\n\n"
+    "🎨 <b>ГЕНЕРАТОР КАРТИНОК (FLUX)</b>\n"
+    "• Напишите боту: <i>«Нарисуй рыжего котика в космосе»</i> или команду <code>/draw сказочный замок</code> — через несколько секунд получите красивую иллюстрацию!\n\n"
+    "💵 <b>СЕМЕЙНЫЕ СЕРВИСЫ</b>\n"
+    "• 💵 <b>Курсы валют:</b> официальные курсы USD, EUR, RUB, CNY от Нацбанка РБ.\n"
+    "• 🎬 <b>Кино на вечер:</b> подборка фильмов и мультфильмов с прямыми ссылками на просмотр на rezka-ua.tv.\n"
+    "• 👨‍👩‍👧 <b>Семейный чат:</b> отправьте <code>/bind</code> в общую группу, чтобы дневник и уведомления были видны всей семье."
+)
+
+@bot.message_handler(commands=["help"])
+@bot.message_handler(func=lambda m: m.text in ("ℹ️ Справка", "/help", "Справка", "Помощь"))
+def handle_help(message: types.Message):
+    bot.send_message(message.chat.id, HELP_TEXT)
+
+@bot.message_handler(func=lambda m: m.text in ("🎨 Нарисовать",))
+def handle_draw_button(message: types.Message):
+    text = (
+        "🎨 <b>Генератор картинок (FLUX)</b>\n\n"
+        "Напишите, что вы хотите нарисовать, например:\n"
+        "• <code>Нарисуй пушистого котёнка в космосе</code>\n"
+        "• <code>Нарисуй сказочный замок на закате</code>\n"
+        "• <code>/draw спорткар будущего в неоновом городе</code>\n\n"
+        "Отправьте текстовое описание прямо в чат! ✨"
+    )
+    bot.send_message(message.chat.id, text)
+
+@bot.message_handler(commands=["draw", "art", "pic"])
+def handle_draw_cmd(message: types.Message):
+    clean = re.sub(r"^/(draw|art|pic)\s*", "", message.text).strip()
+    if not clean:
+        bot.send_message(message.chat.id, "Напишите описание после команды: например <code>/draw сказочный замок</code>")
+        return
+    process_draw_query(message, clean)
+
+def process_draw_query(message: types.Message, prompt: str):
+    wait_msg = bot.send_message(message.chat.id, f"🎨 <b>Художник рисует:</b> <i>«{prompt}»</i>...")
+    try:
+        bot.send_chat_action(message.chat.id, "upload_photo")
+        success, img_bytes, clean_prompt = generate_image_pollinations(prompt)
+        if success and img_bytes:
+            bot.send_photo(
+                message.chat.id,
+                photo=img_bytes,
+                caption=f"🎨 <b>Готово!</b>\n<i>Запрос: {clean_prompt}</i>\n💡 <i>Напишите ещё, что нарисовать!</i>"
+            )
+            try:
+                bot.delete_message(message.chat.id, wait_msg.message_id)
+            except Exception:
+                pass
+        else:
+            bot.edit_message_text(f"🎨 {clean_prompt}", message.chat.id, wait_msg.message_id)
+    except Exception as e:
+        logger.error(f"Draw error: {e}")
+        try:
+            bot.edit_message_text(f"❌ Ошибка генерации: {e}", message.chat.id, wait_msg.message_id)
+        except Exception:
+            pass
+
 @bot.message_handler(func=lambda m: m.text in ("💡 AI-помощник",))
 def handle_ai_prompt(message: types.Message):
     text = (
-        "💡 <b>AI-помощник по домашним заданиям</b>\n\n"
-        "Отправьте пример или вопрос в чат:\n"
-        "• Например: <code>9600 : 24</code> или <code>/ai реши уравнение 2x + 15 = 45</code>\n"
-        "• Или отправьте фото страницы тетради с заданием!"
+        "💡 <b>Универсальный AI-помощник для всей семьи</b>\n\n"
+        "Вы можете задавать любые вопросы прямо в чат:\n"
+        "• <b>По урокам:</b> <i>«как пишется слово парашют?», «реши задачу: поезд ехал 3 часа со скоростью 60 км/ч...»</i>\n"
+        "• <b>Быт и кулинария:</b> <i>«что приготовить из куриного филе и кабачка?», «как отмыть нагар со сковороды?»</i>\n"
+        "• <b>Советы и идеи:</b> <i>«поздравление маме на день рождения в стихах», «переведи на английский...»</i>\n"
+        "• <b>По фото:</b> просто отправьте фото страницы учебника или тетради!\n\n"
+        "💡 <i>В личных сообщениях можно писать просто так — бот поймёт любой вопрос без команды /ai!</i>"
     )
     bot.send_message(message.chat.id, text)
 
@@ -441,7 +516,7 @@ def handle_photo(message: types.Message):
         file_info = bot.get_file(message.photo[-1].file_id)
         downloaded = bot.download_file(file_info.file_path)
         ans = asyncio.run(ask_homework_tutor(caption, image_bytes=downloaded))
-        bot.edit_message_text(f"💡 <b>Ответ AI-репетитора:</b>\n\n{ans}", message.chat.id, status.message_id)
+        bot.edit_message_text(f"💡 <b>Ответ AI:</b>\n\n{ans}", message.chat.id, status.message_id)
     except Exception as e:
         bot.edit_message_text(f"❌ Не удалось обработать фото: {e}", message.chat.id, status.message_id)
 
@@ -455,9 +530,42 @@ def process_ai_query(message: types.Message, query: str):
     status = bot.send_message(message.chat.id, "🤖 AI думает над ответом...")
     try:
         ans = asyncio.run(ask_homework_tutor(query))
-        bot.edit_message_text(f"💡 <b>Ответ AI-репетитора:</b>\n\n{ans}", message.chat.id, status.message_id)
+        bot.edit_message_text(f"💡 <b>Ответ AI:</b>\n\n{ans}", message.chat.id, status.message_id)
     except Exception as e:
         bot.edit_message_text(f"❌ Ошибка AI: {e}", message.chat.id, status.message_id)
+
+@bot.message_handler(content_types=["text"])
+def handle_all_other_text(message: types.Message):
+    text = message.text.strip()
+    if not text:
+        return
+
+    # 1. Проверяем, запрос ли это на рисование
+    if is_draw_request(text):
+        process_draw_query(message, text)
+        return
+
+    # 2. В личных сообщениях - отвечает универсальный AI
+    if message.chat.type == "private":
+        process_ai_query(message, text)
+        return
+
+    # 3. В семейной группе - отвечаем ТОЛЬКО если обратились к боту
+    if message.chat.type in ("group", "supergroup"):
+        try:
+            bot_me = bot.get_me()
+            bot_user = f"@{bot_me.username}".lower()
+            if bot_user in text.lower():
+                clean_q = re.sub(rf"@{bot_me.username}", "", text, flags=re.IGNORECASE).strip()
+                process_ai_query(message, clean_q or "Привет!")
+                return
+            if message.reply_to_message and message.reply_to_message.from_user and message.reply_to_message.from_user.id == bot_me.id:
+                process_ai_query(message, text)
+                return
+        except Exception:
+            pass
+        # В группе бот молчит, если обращаются не к нему!
+
 
 @bot.message_handler(func=lambda m: m.text in ("⚙️ Настройки",))
 def handle_settings(message: types.Message):
