@@ -596,28 +596,35 @@ async def handle_gemini_proxy(request):
 
         models_to_try = [
             "gemini-2.5-flash",
+            "gemini-2.5-flash-lite",
             "gemini-flash-latest",
-            "gemini-2.5-pro"
+            "gemini-flash-lite-latest",
+            "gemini-3.1-flash-lite",
+            "gemini-3.5-flash",
+            "gemini-3.8-flash",
+            "gemini-3.1-pro-preview"
         ]
 
-        last_error = ""
+        errors = {}
         for m in models_to_try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={GEMINI_KEY}"
             def call_g(u=url):
                 import requests
-                return requests.post(u, json={"contents": [{"parts": parts}]}, timeout=20)
+                return requests.post(u, json={"contents": [{"parts": parts}]}, timeout=12)
 
-            resp = await asyncio.to_thread(call_g)
-            if resp.status_code == 200:
-                rj = resp.json()
-                candidates = rj.get("candidates", [])
-                if candidates:
-                    ans = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-                    return web.json_response({"ok": True, "answer": ans})
-            else:
-                last_error = resp.text
+            try:
+                resp = await asyncio.to_thread(call_g)
+                if resp.status_code == 200:
+                    rj = resp.json()
+                    candidates = rj.get("candidates", [])
+                    if candidates:
+                        ans = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                        return web.json_response({"ok": True, "answer": ans, "model": m})
+                errors[m] = f"{resp.status_code}: {resp.text}"
+            except Exception as e:
+                errors[m] = f"EXC: {type(e).__name__}: {e}"
 
-        return web.json_response({"ok": False, "error": last_error}, status=503)
+        return web.json_response({"ok": False, "errors": errors}, status=503)
     except Exception as e:
         return web.json_response({"ok": False, "error": str(e)}, status=500)
 
