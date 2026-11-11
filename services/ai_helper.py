@@ -58,8 +58,3 @@ async def ask_homework_tutor(question: str, image_bytes: Optional[bytes] = None)
         return f"💡 AI-сервер временно недоступен ({resp.status_code}). Попробуйте позже."
     except Exception as e:
         return f"💡 Ошибка связи с AI: {e}"
-            err_data = resp.json()
-            msg = err_data.get("error", {}).get("message", resp.text)
-            return f"⚠️ <b>Ответ AI:</b> {msg}"
-    except Exception as e:
-        return f"❌ Ошибка связи с AI: {e}"
