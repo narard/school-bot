@@ -1,8 +1,11 @@
 import re
+import logging
 from datetime import datetime, date, timedelta
 from typing import List, Dict, Optional, Any
 import requests
 from bs4 import BeautifulSoup
+
+logger = logging.getLogger(__name__)
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -24,38 +27,42 @@ class SchoolsClient:
         Авторизация на schools.by. Возвращает True в случае успеха.
         """
         login_url = "https://schools.by/login"
-        resp = self.session.get(login_url)
-        if resp.status_code != 200:
+        try:
+            resp = self.session.get(login_url, timeout=10)
+            if resp.status_code != 200:
+                return False
+
+            soup = BeautifulSoup(resp.text, "html.parser")
+            csrf_input = soup.find("input", {"name": "csrfmiddlewaretoken"})
+            if not csrf_input:
+                return False
+
+            csrf_token = csrf_input.get("value")
+
+            data = {
+                "csrfmiddlewaretoken": csrf_token,
+                "username": username,
+                "password": password,
+                "|123": "|123",
+            }
+            headers = {
+                "Referer": login_url,
+                "Origin": "https://schools.by",
+            }
+
+            post_resp = self.session.post(login_url, data=data, headers=headers, allow_redirects=True, timeout=12)
+            final_url = post_resp.url
+
+            if "schools.by/login" in final_url:
+                self.logged_in = False
+                return False
+
+            self.logged_in = True
+            self._detect_pupils(post_resp.text, final_url)
+            return True
+        except Exception as e:
+            logger.error(f"SchoolsClient login error: {type(e).__name__}: {e}")
             return False
-
-        soup = BeautifulSoup(resp.text, "html.parser")
-        csrf_input = soup.find("input", {"name": "csrfmiddlewaretoken"})
-        if not csrf_input:
-            return False
-
-        csrf_token = csrf_input.get("value")
-
-        data = {
-            "csrfmiddlewaretoken": csrf_token,
-            "username": username,
-            "password": password,
-            "|123": "|123",
-        }
-        headers = {
-            "Referer": login_url,
-            "Origin": "https://schools.by",
-        }
-
-        post_resp = self.session.post(login_url, data=data, headers=headers, allow_redirects=True)
-        final_url = post_resp.url
-
-        if "schools.by/login" in final_url:
-            self.logged_in = False
-            return False
-
-        self.logged_in = True
-        self._detect_pupils(post_resp.text, final_url)
-        return True
 
     def _detect_pupils(self, page_html: str, current_url: str):
         """
@@ -109,7 +116,7 @@ class SchoolsClient:
         # Уточняем точные имена детей через страницу ученика
         for p in self.pupils:
             try:
-                p_resp = self.session.get(f"https://{p['subdomain']}.schools.by/pupil/{p['id']}")
+                p_resp = self.session.get(f"https://{p['subdomain']}.schools.by/pupil/{p['id']}", timeout=8)
                 if p_resp.status_code == 200:
                     p_soup = BeautifulSoup(p_resp.text, "html.parser")
                     h1 = p_soup.find("h1")
@@ -126,8 +133,11 @@ class SchoolsClient:
         Получает список четвертей и ID текущей активной четверти.
         """
         url = f"https://{subdomain}.schools.by/pupil/{pupil_id}/dnevnik"
-        resp = self.session.get(url)
-        if resp.status_code != 200:
+        try:
+            resp = self.session.get(url, timeout=10)
+            if resp.status_code != 200:
+                return {"current": None, "quarters": []}
+        except Exception:
             return {"current": None, "quarters": []}
 
         soup = BeautifulSoup(resp.text, "html.parser")
@@ -173,8 +183,11 @@ class SchoolsClient:
         else:
             url = f"https://{subdomain}.schools.by/pupil/{pupil_id}/dnevnik"
 
-        resp = self.session.get(url)
-        if resp.status_code != 200:
+        try:
+            resp = self.session.get(url, timeout=12)
+            if resp.status_code != 200:
+                return {"period": "", "days": [], "attendance": ""}
+        except Exception:
             return {"period": "", "days": [], "attendance": ""}
 
         soup = BeautifulSoup(resp.text, "html.parser")
@@ -270,8 +283,11 @@ class SchoolsClient:
         Забирает итоговые четвертные оценки со страницы last-page.
         """
         url = f"https://{subdomain}.schools.by/pupil/{pupil_id}/dnevnik/last-page"
-        resp = self.session.get(url)
-        if resp.status_code != 200:
+        try:
+            resp = self.session.get(url, timeout=12)
+            if resp.status_code != 200:
+                return {"subjects": [], "average": "", "behavior": ""}
+        except Exception:
             return {"subjects": [], "average": "", "behavior": ""}
 
         soup = BeautifulSoup(resp.text, "html.parser")

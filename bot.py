@@ -70,13 +70,13 @@ RUSSIAN_WEEKDAYS = {
     6: "воскресенье"
 }
 
-def get_client_for_user(user: Dict[str, Any]) -> SchoolsClient:
+async def get_client_for_user(user: Dict[str, Any]) -> SchoolsClient:
     tg_id = user["tg_id"]
     if tg_id in user_clients and user_clients[tg_id].logged_in:
         return user_clients[tg_id]
 
     client = SchoolsClient()
-    ok = client.login(user["login"], user["password"])
+    ok = await asyncio.to_thread(client.login, user["login"], user["password"])
     if ok:
         user_clients[tg_id] = client
     return client
@@ -180,7 +180,11 @@ async def process_password(message: types.Message, state: FSMContext):
     status_msg = await message.answer("🔄 Проверяю авторизацию на schools.by...")
 
     client = SchoolsClient()
-    success = client.login(login, password)
+    try:
+        success = await asyncio.to_thread(client.login, login, password)
+    except Exception as e:
+        logger.error(f"Login error: {e}", exc_info=True)
+        success = False
 
     if not success or not client.pupils:
         await status_msg.edit_text(
@@ -252,10 +256,10 @@ async def handle_today(message: types.Message):
 
     wait_msg = await message.answer("⏳ Загружаю дневник...")
     try:
-        client = get_client_for_user(user)
+        client = await get_client_for_user(user)
         pupil_id = user["active_pupil_id"]
         subdomain = user["active_subdomain"]
-        diary = client.get_week_diary(pupil_id, subdomain)
+        diary = await asyncio.to_thread(client.get_week_diary, pupil_id, subdomain)
 
         now = datetime.now()
         weekday_ru = RUSSIAN_WEEKDAYS[now.weekday()]
@@ -289,7 +293,7 @@ async def handle_tomorrow(message: types.Message):
 
     wait_msg = await message.answer("⏳ Загружаю дневник...")
     try:
-        client = get_client_for_user(user)
+        client = await get_client_for_user(user)
         pupil_id = user["active_pupil_id"]
         subdomain = user["active_subdomain"]
 
@@ -301,10 +305,10 @@ async def handle_tomorrow(message: types.Message):
         if tomorrow.weekday() == 6: # Воскресенье -> смотрим понедельник
             monday_next = now + timedelta(days=2)
             weekday_ru = "понедельник"
-            diary = client.get_week_diary(pupil_id, subdomain, week_date=monday_next.strftime("%Y-%m-%d"))
+            diary = await asyncio.to_thread(client.get_week_diary, pupil_id, subdomain, week_date=monday_next.strftime("%Y-%m-%d"))
             is_next_week = True
         else:
-            diary = client.get_week_diary(pupil_id, subdomain)
+            diary = await asyncio.to_thread(client.get_week_diary, pupil_id, subdomain)
 
         target_day = None
         for d in diary.get("days", []):
@@ -336,10 +340,10 @@ async def handle_full_week(message: types.Message):
 
     wait_msg = await message.answer("⏳ Загружаю расписание на всю неделю...")
     try:
-        client = get_client_for_user(user)
+        client = await get_client_for_user(user)
         pupil_id = user["active_pupil_id"]
         subdomain = user["active_subdomain"]
-        diary = client.get_week_diary(pupil_id, subdomain)
+        diary = await asyncio.to_thread(client.get_week_diary, pupil_id, subdomain)
 
         days = diary.get("days", [])
         await wait_msg.delete()
@@ -383,10 +387,10 @@ async def handle_quarter_marks(message: types.Message):
 
     wait_msg = await message.answer("⏳ Загружаю четвертные оценки...")
     try:
-        client = get_client_for_user(user)
+        client = await get_client_for_user(user)
         pupil_id = user["active_pupil_id"]
         subdomain = user["active_subdomain"]
-        q_data = client.get_quarter_marks(pupil_id, subdomain)
+        q_data = await asyncio.to_thread(client.get_quarter_marks, pupil_id, subdomain)
 
         subjects = q_data.get("subjects", [])
         avg = q_data.get("average", "")
@@ -562,11 +566,29 @@ async def callback_toggle_notify(call: types.CallbackQuery):
 async def handle_ping(request):
     return web.Response(text="SchoolsByBot is running!")
 
+async def handle_probe(request):
+    import time
+    t0 = time.time()
+    try:
+        def test_conn():
+            import requests
+            r = requests.get(
+                "https://schools.by/login",
+                timeout=8,
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+            )
+            return r.status_code, len(r.text)
+        code, sz = await asyncio.to_thread(test_conn)
+        return web.Response(text=f"CONNECTED: status={code}, size={sz}, time={time.time()-t0:.2f}s")
+    except Exception as e:
+        return web.Response(text=f"FAILED: {type(e).__name__}: {e}, time={time.time()-t0:.2f}s", status=500)
+
 async def start_web_server():
     port = int(os.environ.get("PORT", 8080))
     app = web.Application()
     app.router.add_get("/", handle_ping)
     app.router.add_get("/health", handle_ping)
+    app.router.add_get("/probe", handle_probe)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", port)

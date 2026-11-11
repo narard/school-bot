@@ -79,7 +79,7 @@ async def check_grades_for_user(bot: Bot, user: Dict[str, Any], client: SchoolsC
         return
 
     try:
-        diary = client.get_week_diary(pupil_id, subdomain)
+        diary = await asyncio.to_thread(client.get_week_diary, pupil_id, subdomain)
         quarter_id = str(diary.get("quarter_id") or "curr")
         days = diary.get("days", [])
 
@@ -135,7 +135,7 @@ async def send_1600_reminder(bot: Bot, user: Dict[str, Any], client: SchoolsClie
         return
 
     try:
-        diary = client.get_week_diary(pupil_id, subdomain)
+        diary = await asyncio.to_thread(client.get_week_diary, pupil_id, subdomain)
         target_day = None
         for d in diary.get("days", []):
             if weekday_ru in d.get("title", "").lower():
@@ -185,7 +185,7 @@ async def send_friday_digest(bot: Bot, user: Dict[str, Any], client: SchoolsClie
     days_to_holidays = max((WINTER_HOLIDAYS_START - now).days, 0)
 
     try:
-        q_data = client.get_quarter_marks(pupil_id, subdomain)
+        q_data = await asyncio.to_thread(client.get_quarter_marks, pupil_id, subdomain)
         avg = q_data.get("average", "—")
 
         text = (
@@ -228,7 +228,7 @@ async def notification_worker(bot: Bot, user_clients: Dict[int, SchoolsClient]):
                         tg_id = u["tg_id"]
                         if tg_id not in user_clients or not user_clients[tg_id].logged_in:
                             c = SchoolsClient()
-                            if c.login(u["login"], u["password"]):
+                            if await asyncio.to_thread(c.login, u["login"], u["password"]):
                                 user_clients[tg_id] = c
                         if tg_id in user_clients:
                             await send_1600_reminder(bot, u, user_clients[tg_id], today_str)
@@ -250,7 +250,7 @@ async def notification_worker(bot: Bot, user_clients: Dict[int, SchoolsClient]):
                         tg_id = u["tg_id"]
                         if tg_id not in user_clients or not user_clients[tg_id].logged_in:
                             c = SchoolsClient()
-                            if c.login(u["login"], u["password"]):
+                            if await asyncio.to_thread(c.login, u["login"], u["password"]):
                                 user_clients[tg_id] = c
                         if tg_id in user_clients:
                             await check_grades_for_user(bot, u, user_clients[tg_id])
