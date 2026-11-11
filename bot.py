@@ -564,6 +564,7 @@ async def callback_toggle_notify(call: types.CallbackQuery):
     await call.answer(f"Уведомления {status_text}!")
 
 GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
+GEMINI_KEYS = [k.strip() for k in [os.environ.get("GEMINI_API_KEY", ""), os.environ.get("GEMINI_API_KEY_BACKUP", "")] if k.strip()]
 
 async def handle_ping(request):
     return web.Response(text="SchoolsByBot is running!")
@@ -605,23 +606,25 @@ async def handle_gemini_proxy(request):
         ]
 
         errors = {}
-        for m in models_to_try:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={GEMINI_KEY}"
-            def call_g(u=url):
-                import requests
-                return requests.post(u, json={"contents": [{"parts": parts}]}, timeout=12)
+        keys = GEMINI_KEYS if GEMINI_KEYS else [GEMINI_KEY]
+        for key in keys:
+            for m in models_to_try:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={key}"
+                def call_g(u=url):
+                    import requests
+                    return requests.post(u, json={"contents": [{"parts": parts}]}, timeout=12)
 
-            try:
-                resp = await asyncio.to_thread(call_g)
-                if resp.status_code == 200:
-                    rj = resp.json()
-                    candidates = rj.get("candidates", [])
-                    if candidates:
-                        ans = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-                        return web.json_response({"ok": True, "answer": ans, "model": m})
-                errors[m] = f"{resp.status_code}: {resp.text}"
-            except Exception as e:
-                errors[m] = f"EXC: {type(e).__name__}: {e}"
+                try:
+                    resp = await asyncio.to_thread(call_g)
+                    if resp.status_code == 200:
+                        rj = resp.json()
+                        candidates = rj.get("candidates", [])
+                        if candidates:
+                            ans = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                            return web.json_response({"ok": True, "answer": ans, "model": m})
+                    errors[f"{key[-6:]}:{m}"] = f"{resp.status_code}: {resp.text}"
+                except Exception as e:
+                    errors[f"{key[-6:]}:{m}"] = f"EXC: {type(e).__name__}: {e}"
 
         return web.json_response({"ok": False, "errors": errors}, status=503)
     except Exception as e:
