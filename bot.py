@@ -599,7 +599,6 @@ async def handle_gemini_proxy(request):
             })
 
         models_to_try = [
-            "gemini-3.8-flash",
             "gemini-3.5-flash",
             "gemini-flash-latest",
             "gemini-3.1-flash-lite",
@@ -613,7 +612,7 @@ async def handle_gemini_proxy(request):
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={key}"
                 def call_g(u=url):
                     import requests
-                    return requests.post(u, json={"contents": [{"parts": parts}]}, timeout=18)
+                    return requests.post(u, json={"contents": [{"parts": parts}]}, timeout=8)
 
                 try:
                     resp = await asyncio.to_thread(call_g)
