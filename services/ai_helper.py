@@ -39,40 +39,25 @@ async def ask_homework_tutor(question: str, image_bytes: Optional[bytes] = None)
         if math_res:
             return math_res
 
-    # 2. Если есть GEMINI_API_KEY — обращаемся к модели Gemini 3.8 Flash
-    key = os.environ.get("GEMINI_API_KEY") or GEMINI_API_KEY
-    if not key:
-        return (
-            "💡 <b>AI-репетитор пока не подключен</b>\n"
-            "Ключ API не обнаружен в переменных окружения."
-        )
-
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key={key}"
-
-    parts = [{"text": f"{SYSTEM_PROMPT}\n\nВопрос: {question}"}]
+    # 2. Обращаемся к облачному AI-прокси
+    url = "https://school-bot-zbh4.onrender.com/api/gemini"
+    payload = {"question": question}
     if image_bytes:
-        b64 = base64.b64encode(image_bytes).decode("utf-8")
-        parts.append({
-            "inline_data": {
-                "mime_type": "image/jpeg",
-                "data": b64
-            }
-        })
+        payload["image_b64"] = base64.b64encode(image_bytes).decode("utf-8")
 
-    payload = {"contents": [{"parts": parts}]}
+    def call_proxy():
+        return requests.post(url, json=payload, timeout=35)
 
     try:
-        resp = requests.post(url, json=payload, timeout=25)
+        resp = await asyncio.to_thread(call_proxy)
         if resp.status_code == 200:
-            data = resp.json()
-            candidates = data.get("candidates", [])
-            if candidates:
-                content = candidates[0].get("content", {})
-                res_parts = content.get("parts", [])
-                if res_parts:
-                    return res_parts[0].get("text", "")
-            return "Не удалось сформулировать ответ. Попробуйте перефразировать вопрос."
-        else:
+            rj = resp.json()
+            if rj.get("ok"):
+                return rj.get("answer")
+            return f"💡 Ответ AI: {rj.get('error', 'не удалось получить ответ')}"
+        return f"💡 AI-сервер временно недоступен ({resp.status_code}). Попробуйте позже."
+    except Exception as e:
+        return f"💡 Ошибка связи с AI: {e}"
             err_data = resp.json()
             msg = err_data.get("error", {}).get("message", resp.text)
             return f"⚠️ <b>Ответ AI:</b> {msg}"

@@ -563,8 +563,45 @@ async def callback_toggle_notify(call: types.CallbackQuery):
     status_text = "включены" if is_on else "отключены"
     await call.answer(f"Уведомления {status_text}!")
 
+GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
+
 async def handle_ping(request):
     return web.Response(text="SchoolsByBot is running!")
+
+async def handle_gemini_proxy(request):
+    try:
+        data = await request.json()
+        question = data.get("question", "")
+        image_b64 = data.get("image_b64")
+
+        prompt_prefix = (
+            "Ты добрый, терпеливый и понятный школьный репетитор для ученицы 4-го класса белорусской школы (9-10 лет). "
+            "Помоги понять и решить задание. Объясняй пошагово, просто и по-доброму.\n\n"
+        )
+        parts = [{"text": f"{prompt_prefix}Вопрос: {question}"}]
+        if image_b64:
+            parts.append({
+                "inline_data": {
+                    "mime_type": "image/jpeg",
+                    "data": image_b64
+                }
+            })
+
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key={GEMINI_KEY}"
+        def call_g():
+            import requests
+            return requests.post(url, json={"contents": [{"parts": parts}]}, timeout=30)
+
+        resp = await asyncio.to_thread(call_g)
+        if resp.status_code == 200:
+            rj = resp.json()
+            candidates = rj.get("candidates", [])
+            if candidates:
+                ans = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                return web.json_response({"ok": True, "answer": ans})
+        return web.json_response({"ok": False, "error": resp.text}, status=resp.status_code)
+    except Exception as e:
+        return web.json_response({"ok": False, "error": str(e)}, status=500)
 
 async def handle_probe(request):
     import time
@@ -589,20 +626,27 @@ async def start_web_server():
     app.router.add_get("/", handle_ping)
     app.router.add_get("/health", handle_ping)
     app.router.add_get("/probe", handle_probe)
+    app.router.add_post("/api/gemini", handle_gemini_proxy)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
-    logger.info(f"Healthcheck web server started on port {port}")
+    logger.info(f"Healthcheck/API web server started on port {port}")
 
 async def main():
     await init_db()
     logger.info("Database initialized.")
-    # Запуск легковесного веб-сервера для облачного хостинга (Render / Koyeb)
     try:
         await start_web_server()
     except Exception as e:
         logger.warning(f"Web server not started: {e}")
+
+    # Если мы в облаке Render — работаем только как облачный AI-прокси
+    if os.environ.get("RENDER"):
+        logger.info("Render detected: running in AI Cloud Proxy mode (no Telegram polling)")
+        while True:
+            await asyncio.sleep(3600)
+
     asyncio.create_task(notification_worker(bot, user_clients))
     logger.info("Bot starting polling...")
     await bot.delete_webhook(drop_pending_updates=True)
