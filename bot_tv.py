@@ -236,7 +236,7 @@ def handle_bind(message: types.Message):
     bot.send_message(message.chat.id, text)
 
 @bot.message_handler(commands=["0", "today"])
-@bot.message_handler(func=lambda m: m.text in ("📅 Сегодня", "/0", "/today"))
+@bot.message_handler(func=lambda m: m.text and (m.text.startswith("/0") or m.text.startswith("/today") or "сегодня" in m.text.lower()))
 def handle_today(message: types.Message):
     user = resolve_user_context(message)
     if not user:
@@ -264,7 +264,7 @@ def handle_today(message: types.Message):
         bot.edit_message_text("❌ Ошибка при загрузке расписания.", message.chat.id, wait_msg.message_id)
 
 @bot.message_handler(commands=["1", "tomorrow"])
-@bot.message_handler(func=lambda m: m.text in ("📆 Завтра", "/1", "/tomorrow"))
+@bot.message_handler(func=lambda m: m.text and (m.text.startswith("/1") or m.text.startswith("/tomorrow") or "завтра" in m.text.lower()))
 def handle_tomorrow(message: types.Message):
     user = resolve_user_context(message)
     if not user:
@@ -303,7 +303,7 @@ def handle_tomorrow(message: types.Message):
         bot.edit_message_text("❌ Ошибка при загрузке расписания.", message.chat.id, wait_msg.message_id)
 
 @bot.message_handler(commands=["7", "week"])
-@bot.message_handler(func=lambda m: m.text in ("🗓 Вся неделя", "/7", "/week"))
+@bot.message_handler(func=lambda m: m.text and (m.text.startswith("/7") or m.text.startswith("/week") or "неделя" in m.text.lower()))
 def handle_week(message: types.Message):
     user = resolve_user_context(message)
     if not user:
@@ -343,7 +343,7 @@ def handle_week(message: types.Message):
         bot.edit_message_text("❌ Ошибка при загрузке недели.", message.chat.id, wait_msg.message_id)
 
 @bot.message_handler(commands=["m", "marks"])
-@bot.message_handler(func=lambda m: m.text in ("📊 Четвертные оценки", "/m", "/marks"))
+@bot.message_handler(func=lambda m: m.text and (m.text.startswith("/m") or m.text.startswith("/marks") or "оценки" in m.text.lower()))
 def handle_quarter_marks(message: types.Message):
     user = resolve_user_context(message)
     if not user:
