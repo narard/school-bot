@@ -222,19 +222,21 @@ def handle_bind(message: types.Message):
         f"• 🌤 В <b>06:40</b> — утренний прогноз погоды в Минске и совет по одежде\n"
         f"• ⏰ В <b>16:00</b> — расписание и всё домашнее задание на завтра\n"
         f"• 🔔 В течение дня — мгновенные уведомления о новых отметках\n\n"
-        f"<b>Команды прямо в чате:</b>\n"
-        f"/today — расписание на сегодня\n"
-        f"/tomorrow — расписание на завтра\n"
-        f"/week — вся неделя\n"
-        f"/marks — четвертные оценки\n"
+        f"<b>Быстрые команды прямо в чате:</b>\n"
+        f"/0 — расписание на сегодня\n"
+        f"/1 — расписание на завтра\n"
+        f"/7 — расписание на всю неделю\n"
+        f"/m — четвертные оценки\n"
+        f"/. &lt;вопрос&gt; — спросить AI-помощника (или /ai)\n"
+        f"/draw &lt;описание&gt; — нарисовать картинку (FLUX)\n"
         f"/weather — погода прямо сейчас\n"
         f"/rates — курсы валют НБРБ\n"
-        f"/film — кино на вечер\n"
-        f"/ai &lt;вопрос&gt; — спросить AI-помощника"
+        f"/film — кино на вечер"
     )
     bot.send_message(message.chat.id, text)
 
-@bot.message_handler(func=lambda m: m.text in ("📅 Сегодня", "/today"))
+@bot.message_handler(commands=["0", "today"])
+@bot.message_handler(func=lambda m: m.text in ("📅 Сегодня", "/0", "/today"))
 def handle_today(message: types.Message):
     user = resolve_user_context(message)
     if not user:
@@ -261,7 +263,8 @@ def handle_today(message: types.Message):
         logger.error(f"Error fetching today: {e}")
         bot.edit_message_text("❌ Ошибка при загрузке расписания.", message.chat.id, wait_msg.message_id)
 
-@bot.message_handler(func=lambda m: m.text in ("📆 Завтра", "/tomorrow"))
+@bot.message_handler(commands=["1", "tomorrow"])
+@bot.message_handler(func=lambda m: m.text in ("📆 Завтра", "/1", "/tomorrow"))
 def handle_tomorrow(message: types.Message):
     user = resolve_user_context(message)
     if not user:
@@ -299,7 +302,8 @@ def handle_tomorrow(message: types.Message):
         logger.error(f"Error fetching tomorrow: {e}")
         bot.edit_message_text("❌ Ошибка при загрузке расписания.", message.chat.id, wait_msg.message_id)
 
-@bot.message_handler(func=lambda m: m.text in ("🗓 Вся неделя", "/week"))
+@bot.message_handler(commands=["7", "week"])
+@bot.message_handler(func=lambda m: m.text in ("🗓 Вся неделя", "/7", "/week"))
 def handle_week(message: types.Message):
     user = resolve_user_context(message)
     if not user:
@@ -338,7 +342,8 @@ def handle_week(message: types.Message):
         logger.error(f"Error fetching week: {e}")
         bot.edit_message_text("❌ Ошибка при загрузке недели.", message.chat.id, wait_msg.message_id)
 
-@bot.message_handler(func=lambda m: m.text in ("📊 Четвертные оценки", "/marks"))
+@bot.message_handler(commands=["m", "marks"])
+@bot.message_handler(func=lambda m: m.text in ("📊 Четвертные оценки", "/m", "/marks"))
 def handle_quarter_marks(message: types.Message):
     user = resolve_user_context(message)
     if not user:
@@ -377,17 +382,20 @@ def handle_quarter_marks(message: types.Message):
         logger.error(f"Error fetching quarters: {e}")
         bot.edit_message_text("❌ Ошибка при загрузке четвертных оценок.", message.chat.id, wait_msg.message_id)
 
-@bot.message_handler(func=lambda m: m.text in ("🌤 Погода", "/weather"))
+@bot.message_handler(commands=["weather", "w"])
+@bot.message_handler(func=lambda m: m.text in ("🌤 Погода", "/weather", "/w"))
 def handle_weather(message: types.Message):
     text = format_weather_message(morning_alert=False)
     bot.send_message(message.chat.id, text)
 
-@bot.message_handler(func=lambda m: m.text in ("💵 Курсы валют", "/rates"))
+@bot.message_handler(commands=["rates", "r"])
+@bot.message_handler(func=lambda m: m.text in ("💵 Курсы валют", "/rates", "/r"))
 def handle_rates(message: types.Message):
     text = format_currency_message()
     bot.send_message(message.chat.id, text)
 
-@bot.message_handler(func=lambda m: m.text in ("🎬 Кино на вечер", "/film"))
+@bot.message_handler(commands=["film", "f"])
+@bot.message_handler(func=lambda m: m.text in ("🎬 Кино на вечер", "/film", "/f"))
 def handle_film(message: types.Message):
     markup = types.InlineKeyboardMarkup(row_width=3)
     b1 = types.InlineKeyboardButton("👻 Ужасы", callback_data="film:horror")
@@ -429,7 +437,14 @@ HELP_TEXT = (
     "🧠 <b>УНИВЕРСАЛЬНЫЙ AI-ПОМОЩНИК (GEMINI)</b>\n"
     "• <b>В личных сообщениях:</b> пишите любые вопросы прямо в чат обычным текстом — бот ответит на всё! От школьных задач и сочинений до рецептов, ремонта и советов.\n"
     "• <b>По фото:</b> сфотографируйте страницу учебника или тетради — бот поймёт задание и распишет понятное пошаговое решение.\n"
-    "• <b>В семейном чате:</b> используйте команду <code>/ai ваш вопрос</code> или ответьте (Reply) на любое сообщение бота.\n\n"
+    "• <b>В семейном чате:</b> используйте короткую команду <code>/. ваш вопрос</code> (или <code>/ai</code>), либо ответьте (Reply) на любое сообщение бота.\n\n"
+    "⚡️ <b>СВЕРХБЫСТРЫЕ КОМАНДЫ (работают везде):</b>\n"
+    "• <code>/0</code> — Расписание на Сегодня\n"
+    "• <code>/1</code> — Расписание на Завтра\n"
+    "• <code>/7</code> — Расписание на Всю неделю\n"
+    "• <code>/m</code> — Четвертные оценки\n"
+    "• <code>/.</code> &lt;вопрос&gt; — Спросить AI-помощника\n"
+    "• <code>/draw</code> &lt;запрос&gt; — Нарисовать картинку\n\n"
     "🎨 <b>ГЕНЕРАТОР КАРТИНОК (FLUX)</b>\n"
     "• Напишите боту: <i>«Нарисуй рыжего котика в космосе»</i> или команду <code>/draw сказочный замок</code> — через несколько секунд получите красивую иллюстрацию!\n\n"
     "💵 <b>СЕМЕЙНЫЕ СЕРВИСЫ</b>\n"
@@ -455,7 +470,7 @@ def handle_draw_button(message: types.Message):
     )
     bot.send_message(message.chat.id, text)
 
-@bot.message_handler(commands=["draw", "art", "pic"])
+@bot.message_handler(commands=["draw", "art", "pic", "d"])
 def handle_draw_cmd(message: types.Message):
     clean = re.sub(r"^/(draw|art|pic)\s*", "", message.text).strip()
     if not clean:
@@ -500,11 +515,13 @@ def handle_ai_prompt(message: types.Message):
     )
     bot.send_message(message.chat.id, text)
 
-@bot.message_handler(commands=["ai"])
+@bot.message_handler(commands=["ai", "a"])
+@bot.message_handler(func=lambda m: m.text and (m.text.startswith("/.") or m.text.startswith(".")))
 def handle_ai_cmd(message: types.Message):
-    query = message.text.replace("/ai", "").strip()
+    text = message.text.strip()
+    query = re.sub(r"^(/ai|/a|/\.|\.)(@[a-zA-Z0-9_]+)?\s*", "", text, flags=re.IGNORECASE).strip()
     if not query:
-        bot.send_message(message.chat.id, "Напишите вопрос после команды: например <code>/ai как пишется слово парашют?</code>")
+        bot.send_message(message.chat.id, "Напишите вопрос после команды:\nНапример: <code>/0</code> — сегодня\nИли <code>/. как пишется слово парашют?</code> (или <code>/ai вопрос</code>)")
         return
     process_ai_query(message, query)
 
