@@ -68,6 +68,13 @@ def resolve_user_context(message: types.Message) -> Optional[Dict[str, Any]]:
         return None
     return db.get_user(message.from_user.id)
 
+def resolve_callback_user(call: types.CallbackQuery) -> Optional[Dict[str, Any]]:
+    if call.message and call.message.chat.type in ("group", "supergroup"):
+        owner_id = db.get_family_chat_owner(call.message.chat.id)
+        if owner_id:
+            return db.get_user(owner_id)
+    return db.get_user(call.from_user.id)
+
 def get_main_keyboard(has_multi_pupils: bool = False) -> types.ReplyKeyboardMarkup:
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     b1 = types.KeyboardButton("📅 Сегодня")
@@ -100,6 +107,14 @@ def get_settings_keyboard(has_multi_pupils: bool, notifications_enabled: bool) -
     markup.add(types.InlineKeyboardButton(notify_text, callback_data="toggle_notify"))
     if has_multi_pupils:
         markup.add(types.InlineKeyboardButton("🔄 Переключить ученика", callback_data="switch_pupil"))
+    return markup
+
+def get_pupils_selection_keyboard(pupils: List[Dict[str, Any]]) -> types.InlineKeyboardMarkup:
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    for p in pupils:
+        name = p.get('name', 'Ученик')
+        pid = str(p.get('pupil_id', ''))
+        markup.add(types.InlineKeyboardButton(f"👤 {name}", callback_data=f"sel_pupil:{pid}"))
     return markup
 
 def format_day_message(day_data: Dict[str, Any], header_prefix: str = "📅") -> str:
@@ -236,7 +251,7 @@ def handle_bind(message: types.Message):
     bot.send_message(message.chat.id, text)
 
 @bot.message_handler(commands=["0", "today"])
-@bot.message_handler(func=lambda m: m.text and (m.text.startswith("/0") or m.text.startswith("/today") or "сегодня" in m.text.lower()))
+@bot.message_handler(func=lambda m: m.text and (m.text.strip().lower() in ("0", "/0", "сегодня", "📅 сегодня") or m.text.startswith("/0") or m.text.startswith("/today")))
 def handle_today(message: types.Message):
     user = resolve_user_context(message)
     if not user:
@@ -264,7 +279,7 @@ def handle_today(message: types.Message):
         bot.edit_message_text("❌ Ошибка при загрузке расписания.", message.chat.id, wait_msg.message_id)
 
 @bot.message_handler(commands=["1", "tomorrow"])
-@bot.message_handler(func=lambda m: m.text and (m.text.startswith("/1") or m.text.startswith("/tomorrow") or "завтра" in m.text.lower()))
+@bot.message_handler(func=lambda m: m.text and (m.text.strip().lower() in ("1", "/1", "завтра", "📆 завтра") or m.text.startswith("/1") or m.text.startswith("/tomorrow")))
 def handle_tomorrow(message: types.Message):
     user = resolve_user_context(message)
     if not user:
@@ -303,7 +318,7 @@ def handle_tomorrow(message: types.Message):
         bot.edit_message_text("❌ Ошибка при загрузке расписания.", message.chat.id, wait_msg.message_id)
 
 @bot.message_handler(commands=["7", "week"])
-@bot.message_handler(func=lambda m: m.text and (m.text.startswith("/7") or m.text.startswith("/week") or "неделя" in m.text.lower()))
+@bot.message_handler(func=lambda m: m.text and (m.text.strip().lower() in ("7", "/7", "неделя", "🗓 вся неделя") or m.text.startswith("/7") or m.text.startswith("/week")))
 def handle_week(message: types.Message):
     user = resolve_user_context(message)
     if not user:
@@ -343,7 +358,7 @@ def handle_week(message: types.Message):
         bot.edit_message_text("❌ Ошибка при загрузке недели.", message.chat.id, wait_msg.message_id)
 
 @bot.message_handler(commands=["m", "marks"])
-@bot.message_handler(func=lambda m: m.text and (m.text.startswith("/m") or m.text.startswith("/marks") or "оценки" in m.text.lower()))
+@bot.message_handler(func=lambda m: m.text and (m.text.strip().lower() in ("m", "м", "/m", "/м", "оценки", "отметки", "📊 четвертные оценки") or m.text.startswith("/m") or m.text.startswith("/marks") or m.text.startswith("/м")))
 def handle_quarter_marks(message: types.Message):
     user = resolve_user_context(message)
     if not user:
@@ -551,6 +566,83 @@ def process_ai_query(message: types.Message, query: str):
     except Exception as e:
         bot.edit_message_text(f"❌ Ошибка AI: {e}", message.chat.id, status.message_id)
 
+@bot.message_handler(commands=["settings", "setup"])
+@bot.message_handler(func=lambda m: m.text and ("настройки" in m.text.lower() or "⚙️" in m.text or m.text.startswith("/settings")))
+def handle_settings(message: types.Message):
+    user = resolve_user_context(message)
+    if not user:
+        bot.send_message(message.chat.id, "Сначала выполните вход: /start")
+        return
+    pupils = db.get_user_pupils(user["tg_id"])
+    has_multi = len(pupils) > 1
+    is_on = user.get("notify_new_grades", 1) == 1
+    pupil_name = user.get("active_pupil_name", "Ученик")
+    notify_val = "ВКЛ 🔔" if is_on else "ВЫКЛ 🔕"
+    text = (
+        f"⚙️ <b>Настройки:</b>\n\n"
+        f"👤 Активный дневник: <b>{pupil_name}</b>\n"
+        f"🔔 Автоуведомления: <b>{notify_val}</b>\n\n"
+        f"Нажмите на кнопку ниже, чтобы изменить:"
+    )
+    bot.send_message(message.chat.id, text, reply_markup=get_settings_keyboard(has_multi, is_on))
+
+@bot.message_handler(func=lambda m: m.text and ("сменить дневник" in m.text.lower() or "переключить" in m.text.lower()))
+def handle_switch_pupil_btn(message: types.Message):
+    user = resolve_user_context(message)
+    if not user:
+        bot.send_message(message.chat.id, "Сначала выполните вход: /start")
+        return
+    pupils = db.get_user_pupils(user["tg_id"])
+    if not pupils:
+        bot.send_message(message.chat.id, "Дети не найдены в аккаунте.")
+        return
+    bot.send_message(message.chat.id, "Выберите ученика из списка:", reply_markup=get_pupils_selection_keyboard(pupils))
+
+@bot.callback_query_handler(func=lambda c: c.data == "switch_pupil")
+def callback_switch_pupil(call: types.CallbackQuery):
+    user = resolve_callback_user(call)
+    if not user:
+        bot.answer_callback_query(call.id, "Сначала выполните вход: /start")
+        return
+    pupils = db.get_user_pupils(user["tg_id"])
+    if not pupils:
+        bot.answer_callback_query(call.id, "Дети не найдены")
+        return
+    bot.edit_message_text(
+        "Выберите ученика из списка:",
+        call.message.chat.id,
+        call.message.message_id,
+        reply_markup=get_pupils_selection_keyboard(pupils)
+    )
+
+@bot.callback_query_handler(func=lambda c: c.data.startswith("sel_pupil:"))
+def callback_select_pupil(call: types.CallbackQuery):
+    pupil_id = call.data.split(":")[1]
+    user = resolve_callback_user(call)
+    if not user:
+        bot.answer_callback_query(call.id, "Сначала выполните вход: /start")
+        return
+    pupils = db.get_user_pupils(user["tg_id"])
+    target = next((p for p in pupils if str(p["pupil_id"]) == str(pupil_id)), None)
+    if target:
+        db.set_active_pupil(user["tg_id"], target["pupil_id"], target["name"], target["subdomain"])
+        bot.edit_message_text(f"✅ Активный дневник переключен на: <b>{target['name']}</b>", call.message.chat.id, call.message.message_id)
+    else:
+        bot.answer_callback_query(call.id, "Ученик не найден")
+
+@bot.callback_query_handler(func=lambda c: c.data == "toggle_notify")
+def callback_toggle_notify(call: types.CallbackQuery):
+    user = resolve_callback_user(call)
+    target_uid = user["tg_id"] if user else call.from_user.id
+    is_on = db.toggle_notifications(target_uid)
+    pupils = db.get_user_pupils(target_uid) if user else []
+    try:
+        bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=get_settings_keyboard(len(pupils) > 1, is_on))
+    except Exception:
+        pass
+    status_str = "включены" if is_on else "отключены"
+    bot.answer_callback_query(call.id, f"Уведомления {status_str}!")
+
 @bot.message_handler(content_types=["text"])
 def handle_all_other_text(message: types.Message):
     text = message.text.strip()
@@ -584,24 +676,7 @@ def handle_all_other_text(message: types.Message):
         # В группе бот молчит, если обращаются не к нему!
 
 
-@bot.message_handler(func=lambda m: m.text in ("⚙️ Настройки",))
-def handle_settings(message: types.Message):
-    user = db.get_user(message.from_user.id)
-    if not user:
-        bot.send_message(message.chat.id, "Сначала выполните вход: /start")
-        return
-    pupils = db.get_user_pupils(message.from_user.id)
-    has_multi = len(pupils) > 1
-    is_on = user.get("notify_new_grades", 1) == 1
-    bot.send_message(message.chat.id, "⚙️ <b>Настройки уведомлений:</b>", reply_markup=get_settings_keyboard(has_multi, is_on))
 
-@bot.callback_query_handler(func=lambda c: c.data == "toggle_notify")
-def callback_toggle_notify(call: types.CallbackQuery):
-    is_on = db.toggle_notifications(call.from_user.id)
-    pupils = db.get_user_pupils(call.from_user.id)
-    bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=get_settings_keyboard(len(pupils) > 1, is_on))
-    status_str = "включены" if is_on else "отключены"
-    bot.answer_callback_query(call.id, f"Уведомления {status_str}!")
 
 # ================= NOTIFIER BACKGROUND WORKER =================
 
