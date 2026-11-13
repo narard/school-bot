@@ -581,22 +581,51 @@ async def handle_gemini_proxy(request):
         data = await request.json()
         question = data.get("question", "")
         image_b64 = data.get("image_b64")
+        history = data.get("history", [])
 
-        prompt_prefix = (
-            "Ты умный, эрудированный, живой и интересный собеседник и персональный помощник.\n"
-            "Правила:\n"
-            "- Отвечай естественно, по существу, без дешёвых шаблонных фраз вроде 'Привет! Замечательный вопрос...' и без сюсюканья.\n"
-            "- Если вопрос явно касается школьных уроков начальной школы — объясняй понятно, доброжелательно и пошагово.\n"
-            "- В остальных случаях — отвечай как взрослый, эрудированный эксперт: качественно, глубоко, с практической пользой и хорошим слогом.\n\n"
+        system_instruction = (
+            "Ты дружелюбный, наглядный и лаконичный домашний AI-репетитор для ученицы 4-го класса (9-10 лет).\n\n"
+            "КРИТИЧЕСКИЕ ПРАВИЛА (СТРОГО СОБЛЮДАЙ!):\n"
+            "1. НИКАКИХ ПРОСТЫНЕЙ ТЕКСТА! Максимум 12-18 коротких строк на весь ответ. Ребёнок 4-го класса не читает длинные лекции.\n"
+            "2. ОБЯЗАТЕЛЬНО ВИЗУАЛИЗИРУЙ задачу наглядно (схемой, эмодзи, стрелочками, предметами):\n"
+            "   • Яблоки 🍏, конфеты 🍬, коробки 📦, шаги 👣, машинки 🚗, человечки 👤.\n"
+            "   • Наглядная схема: Было: 📦 [12 шт] + 📦 [12 шт] ──► Всего: 24 шт.\n"
+            "3. СТРОГИЙ ВИЗУАЛЬНЫЙ ШАБЛОН ДЛЯ ЗАДАЧ:\n"
+            "   🎯 Суть: (1 короткая строка: что ищем простыми словами)\n\n"
+            "   🧩 Наглядная схема:\n"
+            "   (2-3 строчки с эмодзи и стрелочками, показывающие условие задачи)\n\n"
+            "   🔢 Решение:\n"
+            "   1) 12 · 2 = 24 (шт.) — в двух коробках.\n"
+            "   2) 24 - 5 = 19 (шт.) — осталось.\n\n"
+            "   ⭐️ Ответ: 19 штук.\n"
+            "4. Если вопрос по русскому или белорусскому языку — дай правило в 1 строку и покажи 2-3 наглядных примера с выделением букв.\n"
+            "5. Если это общий вопрос от взрослого — отвечай четко, структурировано и без воды."
         )
-        parts = [{"text": f"{prompt_prefix}Вопрос: {question}"}]
+
+        contents = []
+        if history:
+            for turn in history:
+                role = "user" if turn.get("role") == "user" else "model"
+                contents.append({
+                    "role": role,
+                    "parts": [{"text": turn.get("text", "")}]
+                })
+
+        current_parts = []
+        if not contents:
+            current_parts.append({"text": f"{system_instruction}\n\nВопрос: {question}"})
+        else:
+            current_parts.append({"text": question})
+
         if image_b64:
-            parts.append({
+            current_parts.append({
                 "inline_data": {
                     "mime_type": "image/jpeg",
                     "data": image_b64
                 }
             })
+
+        contents.append({"role": "user", "parts": current_parts})
 
         models_to_try = [
             "gemini-3.5-flash",
@@ -612,7 +641,7 @@ async def handle_gemini_proxy(request):
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={key}"
                 def call_g(u=url):
                     import requests
-                    return requests.post(u, json={"contents": [{"parts": parts}]}, timeout=8)
+                    return requests.post(u, json={"contents": contents}, timeout=25)
 
                 try:
                     resp = await asyncio.to_thread(call_g)

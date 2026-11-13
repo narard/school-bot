@@ -540,15 +540,61 @@ def handle_ai_cmd(message: types.Message):
         return
     process_ai_query(message, query)
 
+def send_ai_reply(chat_id: int, answer: str, status_msg_id: Optional[int] = None):
+    header = "💡 <b>Ответ AI:</b>\n\n"
+    full_text = f"{header}{answer}"
+    
+    if status_msg_id and len(full_text) <= 4000:
+        try:
+            bot.edit_message_text(full_text, chat_id, status_msg_id, parse_mode="HTML")
+            return
+        except Exception:
+            try:
+                bot.edit_message_text(f"💡 Ответ AI:\n\n{answer}", chat_id, status_msg_id)
+                return
+            except Exception:
+                pass
+
+    if status_msg_id:
+        try:
+            bot.delete_message(chat_id, status_msg_id)
+        except Exception:
+            pass
+
+    chunks = []
+    curr = ""
+    for part in answer.split("\n\n"):
+        if len(curr) + len(part) + 2 > 3500:
+            if curr:
+                chunks.append(curr.strip())
+            curr = part + "\n\n"
+        else:
+            curr += part + "\n\n"
+    if curr.strip():
+        chunks.append(curr.strip())
+
+    for idx, c in enumerate(chunks):
+        prefix = header if idx == 0 else ""
+        try:
+            bot.send_message(chat_id, f"{prefix}{c}", parse_mode="HTML")
+        except Exception:
+            bot.send_message(chat_id, f"{prefix}{c}")
+
+@bot.message_handler(commands=["new", "clear", "reset"])
+def handle_clear_ai_context(message: types.Message):
+    from services.ai_helper import clear_chat_history
+    clear_chat_history(message.chat.id)
+    bot.send_message(message.chat.id, "🔄 <b>Память диалога очищена!</b>\nМожем начинать новую тему или задачу с чистого листа.")
+
 @bot.message_handler(content_types=["photo"])
 def handle_photo(message: types.Message):
-    caption = message.caption or "Помоги решить задание на фото"
+    caption = message.caption or "Помоги решить задание на фото. Объясни наглядно и кратко."
     status = bot.send_message(message.chat.id, "🤖 Анализирую задание с фото...")
     try:
         file_info = bot.get_file(message.photo[-1].file_id)
         downloaded = bot.download_file(file_info.file_path)
-        ans = asyncio.run(ask_homework_tutor(caption, image_bytes=downloaded))
-        bot.edit_message_text(f"💡 <b>Ответ AI:</b>\n\n{ans}", message.chat.id, status.message_id)
+        ans = asyncio.run(ask_homework_tutor(caption, image_bytes=downloaded, chat_id=message.chat.id))
+        send_ai_reply(message.chat.id, ans, status.message_id)
     except Exception as e:
         bot.edit_message_text(f"❌ Не удалось обработать фото: {e}", message.chat.id, status.message_id)
 
@@ -561,8 +607,8 @@ def process_ai_query(message: types.Message, query: str):
 
     status = bot.send_message(message.chat.id, "🤖 AI думает над ответом...")
     try:
-        ans = asyncio.run(ask_homework_tutor(query))
-        bot.edit_message_text(f"💡 <b>Ответ AI:</b>\n\n{ans}", message.chat.id, status.message_id)
+        ans = asyncio.run(ask_homework_tutor(query, chat_id=message.chat.id))
+        send_ai_reply(message.chat.id, ans, status.message_id)
     except Exception as e:
         bot.edit_message_text(f"❌ Ошибка AI: {e}", message.chat.id, status.message_id)
 
