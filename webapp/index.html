@@ -2164,7 +2164,7 @@ function renderDiaryTab() {
     thirdVal = d.behavior || "В норме";
   }
 
-  html += `
+  const statsHtml = `
     <div class="study-stats">
       <div class="stat-tile">
         <div class="stat-k">${avgLabel}</div>
@@ -2193,8 +2193,8 @@ function renderDiaryTab() {
       </div>
       <div style="text-align:center;font-size:11.5px;color:var(--muted);margin:-6px 0 10px;">Листайте дни свайпом влево или вправо</div>
       <div class="card-box">
-        ${d.attendance ? `<div style="font-size:12px;color:var(--muted);margin:0 0 12px;">${esc(d.attendance)}</div>` : ""}
         ${renderLessonsList(d.lessons)}
+        ${d.attendance ? `<div style="font-size:12px;color:var(--muted);margin:12px 0 0;padding-top:10px;border-top:1px solid var(--surface-soft);">${esc(d.attendance)}</div>` : ""}
       </div>
     `;
   } else if (state.diaryMode === "week") {
@@ -2282,7 +2282,6 @@ function renderDiaryTab() {
         <span class="day-head-title">Четвертные оценки</span>
         <span class="day-count-pill">I · II · III · IV · Год</span>
       </div>
-      ${d.attendance ? `<div style="font-size:12.5px;color:var(--muted);margin:-2px 0 12px;">${esc(d.attendance)}</div>` : ""}
       ${(d.subjects && d.subjects.length) ? d.subjects.map(s => `
         <div class="tx-row">
           <div style="font-weight:600;font-size:14px;">${esc(s.subject)}</div>
@@ -2292,8 +2291,10 @@ function renderDiaryTab() {
           </div>
         </div>
       `).join("") : `<div style="text-align:center;padding:12px 0;color:var(--muted);font-size:13.5px;">Четвертные оценки пока не выставлены</div>`}
+      ${d.attendance ? `<div style="font-size:12.5px;color:var(--muted);margin:12px 0 0;padding-top:10px;border-top:1px solid var(--surface-soft);">${esc(d.attendance)}</div>` : ""}
     </div>`;
   }
+  html += statsHtml;
   el.innerHTML = html;
 }
 
