@@ -610,6 +610,109 @@
     .mark-badge.mid { background: var(--info-bg); color: var(--info-text); }
     .mark-badge.low { background: var(--warn-bg); color: var(--warn-text); }
 
+    /* Нативные метрики и навигация по неделям/месяцам в «Учёбе» */
+    .study-stats {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .stat-tile {
+      background: var(--surface);
+      border-radius: 18px;
+      padding: 12px 10px;
+      box-shadow: var(--shadow-card);
+      text-align: center;
+    }
+    .stat-k { font-size: 11px; color: var(--muted); font-weight: 600; }
+    .stat-v { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 18px; font-weight: 700; margin-top: 3px; color: var(--text); }
+    .stat-v.ok { color: var(--ok-text); }
+    .stat-v.warn { color: var(--warn-text); }
+    .stat-v.bad { color: var(--bad-text); }
+
+    .period-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      background: var(--surface);
+      border-radius: 999px;
+      padding: 5px 6px;
+      margin-bottom: 12px;
+      box-shadow: var(--shadow-card);
+    }
+    .nav-arrow {
+      width: 34px;
+      height: 34px;
+      border-radius: 999px;
+      border: none;
+      background: var(--surface-soft);
+      color: var(--text);
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+    }
+    .period-label {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-size: 13.5px;
+      font-weight: 700;
+      text-align: center;
+    }
+    .day-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--surface-soft);
+    }
+    .day-head-title { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 15px; font-weight: 700; }
+    .day-count-pill {
+      font-size: 11.5px;
+      font-weight: 600;
+      padding: 3px 9px;
+      border-radius: 999px;
+      background: var(--surface-tonal);
+      color: var(--info-text);
+    }
+    .week-row-btn {
+      width: 100%;
+      border: none;
+      background: transparent;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      padding: 4px 0;
+      font-family: inherit;
+      color: var(--text);
+      text-align: left;
+      cursor: pointer;
+    }
+    .q-pills {
+      display: flex;
+      gap: 5px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .q-cell {
+      min-width: 28px;
+      height: 28px;
+      padding: 0 6px;
+      border-radius: 8px;
+      background: var(--surface-soft);
+      color: var(--text-sec);
+      font-size: 12px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .q-cell.has { background: var(--ok-bg); color: var(--ok-text); }
+    .q-cell.yr { background: var(--primary-container); color: var(--on-primary-container); }
+
     /* Нижняя панель навигации Material 3 (3 чёткие вкладки) */
     .bottom-nav {
       position: fixed;
@@ -884,11 +987,11 @@
     <button class="nav-item active" data-tab="wallet" onclick="switchTab('wallet')">
       <span class="nav-pill">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/>
-          <path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>
+          <rect x="2" y="5" width="20" height="14" rx="3"/><line x1="2" y1="10" x2="22" y2="10"/>
+          <line x1="6" y1="15" x2="10" y2="15"/>
         </svg>
       </span>
-      <span>Кошелёк</span>
+      <span>Баланс</span>
     </button>
     <button class="nav-item" data-tab="expenses" onclick="switchTab('expenses')">
       <span class="nav-pill">
@@ -933,9 +1036,9 @@
     <div class="sec-title" style="margin-bottom:8px;">Что здесь где (кратко)</div>
     <div class="step-box" style="display:block;">
       <div style="font-size:13px;line-height:1.5;color:var(--text-sec);">
-        <p><b>1. Кошелёк</b> — балансы столовой, буфета и ваши кружки. Кнопка «Как оплатить» просто показывает реквизиты, деньги не списывает.</p>
+        <p><b>1. Баланс</b> — остатки столовой, буфета и ваши кружки. Кнопка «Как оплатить» просто показывает реквизиты, деньги не списывает.</p>
         <p style="margin-top:6px;"><b>2. Траты</b> — автоматически считает, сколько ушло на питание и кружки за месяц, четверть и год.</p>
-        <p style="margin-top:6px;"><b>3. Учёба</b> — уроки, домашка и оценки из Schools.by.</p>
+        <p style="margin-top:6px;"><b>3. Учёба</b> — уроки на день, неделю или месяц, средний балл, пропуски и оценки из Schools.by.</p>
       </div>
     </div>
   </div>
@@ -964,6 +1067,9 @@
     </div>
     <div class="form-err" id="childError"></div>
     <button class="btn btn-primary" onclick="saveChild()">Сохранить профиль</button>
+    <div id="childDeleteWrap" style="margin-top:10px;display:none;">
+      <button class="btn btn-danger-soft" id="childDeleteBtn">Удалить профиль ребёнка</button>
+    </div>
   </div>
 </div>
 
@@ -1151,6 +1257,7 @@ const state = {
   children: [], clubs: [], districts: [],
   selectedChildId: null, activeTab: "wallet",
   expPeriod: "month", diaryMode: "today",
+  weekOffset: 0, monthOffset: 0, expandedWeekIdx: 0,
   expenses: null, diary: null,
   selectedOrg: null, selectedService: null, inspectServices: [], searchItems: [],
   payClub: null,
@@ -1354,8 +1461,8 @@ function renderCurrentTab() {
 
     let html = `
       <div class="tab-intro">
-        <h1>Кошелёк и кружки</h1>
-        <p>${activeChild ? `Счета для ребёнка: ${esc(activeChild.name)}` : "Все школьные счета и секции семьи"}</p>
+        <h1>Школьный баланс</h1>
+        <p>${activeChild ? `Счета и кружки: ${esc(activeChild.name)}` : "Остатки на питании и все кружки семьи"}</p>
       </div>
 
       <div class="hero-card">
@@ -1486,14 +1593,30 @@ function renderExpensesTab() {
 
 async function loadDiary() {
   document.getElementById("mainContent").innerHTML = `
-    <div class="tab-intro"><h1>Учёба и дневник</h1><p>Расписание, домашка и оценки из Schools.by</p></div>
-    <div class="empty-card"><h3>Загружаем дневник...</h3><p>Получаем актуальное расписание</p></div>
+    <div class="tab-intro"><h1>Учёба и дневник</h1><p>Расписание на дни, недели и месяц, оценки и пропуски</p></div>
+    <div class="empty-card"><h3>Загружаем дневник...</h3><p>Получаем данные из Schools.by</p></div>
   `;
   const qChild = state.selectedChildId !== null ? `&child_id=${state.selectedChildId}` : "";
-  state.diary = await api(`/api/diary?mode=${state.diaryMode}${qChild}`);
+  state.diary = await api(`/api/diary?mode=${state.diaryMode}&week_offset=${state.weekOffset}&month_offset=${state.monthOffset}${qChild}`);
+  state.expandedWeekIdx = 0;
   renderDiaryTab();
 }
-function setDiaryMode(m) { state.diaryMode = m; loadDiary(); }
+function setDiaryMode(m) {
+  state.diaryMode = m;
+  loadDiary();
+}
+function shiftWeek(delta) {
+  state.weekOffset = delta === 0 ? 0 : (state.weekOffset + delta);
+  loadDiary();
+}
+function shiftMonth(delta) {
+  state.monthOffset = delta === 0 ? 0 : (state.monthOffset + delta);
+  loadDiary();
+}
+function toggleMonthWeek(idx) {
+  state.expandedWeekIdx = state.expandedWeekIdx === idx ? -1 : idx;
+  renderDiaryTab();
+}
 
 function markBadgeClass(m) {
   const num = parseInt(String(m || "").replace(/\D/g, ""));
@@ -1502,53 +1625,205 @@ function markBadgeClass(m) {
   return "low";
 }
 
+function renderLessonsList(lessons) {
+  if (!lessons || !lessons.length) {
+    return `<div style="text-align:center;padding:12px 0;color:var(--muted);font-size:13.5px;">Уроков нет</div>`;
+  }
+  return lessons.map(l => `
+    <div class="lesson-card">
+      <div class="lesson-num">${esc(l.number || "·")}<span class="lesson-time-mini">${esc((l.time || "").split("–")[0])}</span></div>
+      <div class="lesson-body">
+        <div class="lesson-subj">${esc(l.subject)}</div>
+        ${l.homework ? `<div class="lesson-hw">${esc(l.homework)}</div>` : ""}
+      </div>
+      ${l.mark ? `<div class="mark-badge ${markBadgeClass(l.mark)}">${esc(l.mark)}</div>` : ""}
+    </div>
+  `).join("");
+}
+
 function renderDiaryTab() {
   const el = document.getElementById("mainContent");
   const d = state.diary || {};
+  const isDays = state.diaryMode === "today" || state.diaryMode === "tomorrow";
+
   let html = `
     <div class="tab-intro">
       <h1>Учёба и дневник</h1>
-      <p>Расписание, домашние задания и оценки из Schools.by</p>
+      <p>${d.child_name ? `Ученик: ${esc(d.child_name)}` : "Расписание, оценки и пропуски из Schools.by"}</p>
     </div>
+
     <div class="seg-bar">
-      <button class="seg-btn ${state.diaryMode === "today" ? "active" : ""}" onclick="setDiaryMode('today')">Сегодня</button>
-      <button class="seg-btn ${state.diaryMode === "tomorrow" ? "active" : ""}" onclick="setDiaryMode('tomorrow')">Завтра</button>
-      <button class="seg-btn ${state.diaryMode === "marks" ? "active" : ""}" onclick="setDiaryMode('marks')">Четвертные</button>
+      <button class="seg-btn ${isDays ? "active" : ""}" onclick="setDiaryMode('today')">Дни</button>
+      <button class="seg-btn ${state.diaryMode === "week" ? "active" : ""}" onclick="setDiaryMode('week')">Неделя</button>
+      <button class="seg-btn ${state.diaryMode === "month" ? "active" : ""}" onclick="setDiaryMode('month')">Месяц</button>
+      <button class="seg-btn ${state.diaryMode === "marks" ? "active" : ""}" onclick="setDiaryMode('marks')">Итоги</button>
     </div>
   `;
+
   if (!d.ok) {
-    html += `<div class="empty-card"><h3>Нет данных дневника</h3><p>${esc(d.error || "Проверьте привязку Schools.by в Telegram-боте")}</p></div>`;
+    html += `<div class="empty-card"><h3>Нет данных дневника</h3><p>${esc(d.error || "Проверьте привязку Schools.by в настройках или в Telegram-боте")}</p></div>`;
     el.innerHTML = html;
     return;
   }
-  if (d.mode === "marks") {
+
+  // Нативная сводка показателей (Средний балл · Пропуски · Уроков/Поведение)
+  const att = d.attendance_info || { missed_total: 0, missed_unexcused: 0 };
+  const avgVal = state.diaryMode === "week" && d.week_average
+    ? `${d.week_average}`
+    : (state.diaryMode === "month" && d.month_average
+      ? `${d.month_average}`
+      : (d.average || d.quarter_average || "—"));
+  const avgLabel = state.diaryMode === "week" && d.week_average
+    ? "Балл за неделю"
+    : (state.diaryMode === "month" && d.month_average ? "Балл за месяц" : "Средний балл");
+
+  const missVal = `${att.missed_total || 0} ур.`;
+  const missCls = (att.missed_unexcused || 0) > 0 ? "bad" : ((att.missed_total || 0) > 0 ? "warn" : "ok");
+
+  let thirdLabel = "Уроков";
+  let thirdVal = "—";
+  if (isDays) {
+    thirdLabel = "Уроков в день";
+    thirdVal = `${(d.lessons || []).length}`;
+  } else if (state.diaryMode === "week") {
+    thirdLabel = "Всего уроков";
+    thirdVal = `${d.total_lessons || 0}`;
+  } else if (state.diaryMode === "month") {
+    thirdLabel = "За месяц";
+    thirdVal = `${d.total_lessons || 0} ур.`;
+  } else if (state.diaryMode === "marks") {
+    thirdLabel = "Поведение";
+    thirdVal = d.behavior || "В норме";
+  }
+
+  html += `
+    <div class="study-stats">
+      <div class="stat-tile">
+        <div class="stat-k">${avgLabel}</div>
+        <div class="stat-v">${esc(avgVal)}</div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-k">Пропуски</div>
+        <div class="stat-v ${missCls}">${esc(missVal)}</div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-k">${thirdLabel}</div>
+        <div class="stat-v">${esc(thirdVal)}</div>
+      </div>
+    </div>
+  `;
+
+  if (isDays) {
+    html += `
+      <div class="seg-bar" style="margin-bottom:12px;">
+        <button class="seg-btn ${state.diaryMode === "today" ? "active" : ""}" onclick="setDiaryMode('today')">Сегодня</button>
+        <button class="seg-btn ${state.diaryMode === "tomorrow" ? "active" : ""}" onclick="setDiaryMode('tomorrow')">Завтра</button>
+      </div>
+      <div class="card-box">
+        <div class="day-head">
+          <span class="day-head-title">${esc(d.day_title)}</span>
+          <span class="day-count-pill">${(d.lessons || []).length} ур.</span>
+        </div>
+        ${d.attendance ? `<div style="font-size:12px;color:var(--muted);margin:-4px 0 12px;">${esc(d.attendance)}</div>` : ""}
+        ${renderLessonsList(d.lessons)}
+      </div>
+    `;
+  } else if (state.diaryMode === "week") {
+    html += `
+      <div class="period-nav">
+        <button class="nav-arrow" title="Прошлая неделя" onclick="shiftWeek(-1)">‹</button>
+        <div class="period-label">
+          ${esc(d.period || "Неделя")}
+          ${state.weekOffset !== 0 ? `<button type="button" style="margin-left:8px;border:none;background:var(--surface-tonal);color:var(--info-text);padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;" onclick="shiftWeek(0)">Текущая</button>` : ""}
+        </div>
+        <button class="nav-arrow" title="Следующая неделя" onclick="shiftWeek(1)">›</button>
+      </div>
+    `;
+    const days = d.days || [];
+    if (!days.length) {
+      html += `<div class="empty-card"><h3>На эту неделю уроков нет</h3><p>Возможно, это каникулы или расписание ещё не заполнено в Schools.by</p></div>`;
+    } else {
+      html += days.map(day => `
+        <div class="card-box">
+          <div class="day-head">
+            <span class="day-head-title">${esc(day.title)}</span>
+            <span class="day-count-pill">${day.lesson_count || 0} ур.</span>
+          </div>
+          ${renderLessonsList(day.lessons)}
+        </div>
+      `).join("");
+    }
+  } else if (state.diaryMode === "month") {
+    html += `
+      <div class="period-nav">
+        <button class="nav-arrow" title="Прошлый месяц" onclick="shiftMonth(-1)">‹</button>
+        <div class="period-label">
+          ${esc(d.month_title || "Месяц")}
+          ${state.monthOffset !== 0 ? `<button type="button" style="margin-left:8px;border:none;background:var(--surface-tonal);color:var(--info-text);padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;" onclick="shiftMonth(0)">Текущий</button>` : ""}
+        </div>
+        <button class="nav-arrow" title="Следующий месяц" onclick="shiftMonth(1)">›</button>
+      </div>
+    `;
+
+    if (d.marks_list && d.marks_list.length) {
+      html += `
+        <div class="card-box">
+          <div class="sec-title" style="margin-bottom:10px;">Оценки за месяц (${d.marks_list.length})</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;">
+            ${d.marks_list.map(m => `<span class="status-pill pill-info" title="${esc(m.day)}">${esc(m.subject)}: <b>${esc(m.mark)}</b></span>`).join("")}
+          </div>
+        </div>
+      `;
+    }
+
+    const weeks = d.weeks || [];
+    html += `<div class="sec-header"><span class="sec-title">Недели месяца</span><span class="sec-sub">Нажмите, чтобы раскрыть</span></div>`;
+    if (!weeks.length) {
+      html += `<div class="empty-card"><h3>Нет данных за этот месяц</h3><p>Попробуйте выбрать другой месяц стрелками выше</p></div>`;
+    } else {
+      html += weeks.map((wk, idx) => {
+        const isOpen = state.expandedWeekIdx === idx;
+        return `
+          <div class="card-box">
+            <button class="week-row-btn" onclick="toggleMonthWeek(${idx})">
+              <div>
+                <div class="card-title">${esc(wk.period)}</div>
+                <div style="font-size:12px;color:var(--muted);margin-top:2px;">
+                  ${wk.total_lessons} уроков${wk.week_average ? ` · Средний балл ${wk.week_average}` : ""}
+                </div>
+              </div>
+              <span class="day-count-pill">${isOpen ? "Скрыть" : "Открыть"}</span>
+            </button>
+            ${isOpen ? `
+              <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--surface-soft);">
+                ${(wk.days && wk.days.length) ? wk.days.map(day => `
+                  <div style="margin-bottom:12px;">
+                    <div style="font-weight:700;font-size:13.5px;margin-bottom:6px;color:var(--primary);">${esc(day.title)} (${day.lesson_count} ур.)</div>
+                    ${renderLessonsList(day.lessons)}
+                  </div>
+                `).join("") : `<div style="color:var(--muted);font-size:13px;">Уроков на этой неделе нет</div>`}
+              </div>
+            ` : ""}
+          </div>
+        `;
+      }).join("");
+    }
+  } else if (state.diaryMode === "marks") {
     html += `<div class="card-box">
-      <div class="card-title" style="font-size:17px;">${esc(d.child_name)}</div>
-      <div style="font-size:13px;color:var(--muted);margin:4px 0 14px;">Средний балл: <b>${esc(d.average || "—")}</b>${d.behavior ? " · Поведение: <b>" + esc(d.behavior) + "</b>" : ""}</div>
-      ${(d.subjects || []).map(s => `
+      <div class="day-head">
+        <span class="day-head-title">Четвертные оценки</span>
+        <span class="day-count-pill">I · II · III · IV · Год</span>
+      </div>
+      ${d.attendance ? `<div style="font-size:12.5px;color:var(--muted);margin:-2px 0 12px;">${esc(d.attendance)}</div>` : ""}
+      ${(d.subjects && d.subjects.length) ? d.subjects.map(s => `
         <div class="tx-row">
-          <div>
-            <div style="font-weight:600;font-size:14px;">${esc(s.subject)}</div>
-            <div style="font-size:12px;color:var(--muted);margin-top:2px;">Оценки: ${esc((s.marks || []).join(" · "))}</div>
+          <div style="font-weight:600;font-size:14px;">${esc(s.subject)}</div>
+          <div class="q-pills">
+            ${[s.q1, s.q2, s.q3, s.q4].map((v, i) => `<span class="q-cell ${v ? "has" : ""}" title="${i+1} четверть">${esc(v || "·")}</span>`).join("")}
+            ${s.year ? `<span class="q-cell yr" title="Годовая">${esc(s.year)}</span>` : ""}
           </div>
-          <div class="mark-badge ${markBadgeClass((s.marks || [])[0])}">${esc((s.marks || [])[0] || "—")}</div>
         </div>
-      `).join("")}
-    </div>`;
-  } else {
-    html += `<div class="card-box">
-      <div class="card-title" style="font-size:17px;">${esc(d.day_title)} — ${esc(d.child_name)}</div>
-      ${d.attendance ? `<div style="font-size:12.5px;color:var(--muted);margin:4px 0 12px;">${esc(d.attendance)}</div>` : `<div style="margin-bottom:10px;"></div>`}
-      ${(d.lessons && d.lessons.length) ? d.lessons.map(l => `
-        <div class="lesson-card">
-          <div class="lesson-num">${esc(l.number || "·")}<span class="lesson-time-mini">${esc((l.time || "").split("–")[0])}</span></div>
-          <div class="lesson-body">
-            <div class="lesson-subj">${esc(l.subject)}</div>
-            ${l.homework ? `<div class="lesson-hw">${esc(l.homework)}</div>` : ""}
-          </div>
-          ${l.mark ? `<div class="mark-badge ${markBadgeClass(l.mark)}">${esc(l.mark)}</div>` : ""}
-        </div>
-      `).join("") : `<div style="text-align:center;padding:16px 0;color:var(--muted);font-size:14px;">На этот день уроков нет</div>`}
+      `).join("") : `<div style="text-align:center;padding:12px 0;color:var(--muted);font-size:13.5px;">Четвертные оценки пока не выставлены</div>`}
     </div>`;
   }
   el.innerHTML = html;
@@ -1570,14 +1845,17 @@ function openSettingsModal() {
   list.innerHTML = state.children.length
     ? state.children.map((c, idx) => `
       <div class="step-box" style="margin-bottom:8px;">
-        <div style="display:flex;align-items:center;gap:10px;">
+        <div style="display:flex;align-items:center;gap:10px;min-width:0;">
           <span class="child-avatar" style="background:${AVATAR_COLORS[idx % AVATAR_COLORS.length]}">${esc((c.name || "?").charAt(0).toUpperCase())}</span>
-          <div>
-            <div style="font-weight:700;font-size:14px;">${esc(c.name)}</div>
+          <div style="min-width:0;">
+            <div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(c.name)}</div>
             <div style="font-size:12px;color:var(--muted);">${esc(c.district || "Фрунзенский район")}${c.erip_account ? " · Счёт " + esc(c.erip_account) : ""}</div>
           </div>
         </div>
-        <button class="btn-pill btn-tonal" onclick="closeModal('modalSettings'); openChildModal(${c.id})">Изменить</button>
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+          <button class="btn-pill btn-tonal" onclick="closeModal('modalSettings'); openChildModal(${c.id})">Изменить</button>
+          <button class="btn-more" title="Удалить профиль" style="background:var(--bad-bg);color:var(--bad-text);" onclick="askDeleteChild(${c.id}, '${esc(c.name).replace(/'/g,"")}')">✕</button>
+        </div>
       </div>
     `).join("")
     : `<div style="font-size:13px;color:var(--muted);margin-bottom:10px;">Профилей пока нет</div>`;
@@ -1655,10 +1933,25 @@ function askDeleteExpense(expId, title) {
   openModal("modalDeleteConfirm");
 }
 
+function askDeleteChild(childId, childName) {
+  document.getElementById("delConfirmText").textContent = `Удалить профиль «${childName}» и его привязанные счета?`;
+  document.getElementById("delConfirmYesBtn").onclick = async () => {
+    await api(`/api/children/${childId}`, { method: "DELETE" });
+    if (state.selectedChildId === childId) state.selectedChildId = null;
+    closeModal("modalDeleteConfirm");
+    closeModal("modalChild");
+    closeModal("modalSettings");
+    showToast("Профиль удалён");
+    await loadBootstrap();
+  };
+  openModal("modalDeleteConfirm");
+}
+
 function openChildModal(editId = null) {
   showFormErr("childError", "");
   const sel = document.getElementById("childDistrictSelect");
   sel.innerHTML = state.districts.map(d => `<option value="${esc(d)}">${esc(d)}</option>`).join("");
+  const delWrap = document.getElementById("childDeleteWrap");
   if (editId) {
     const ch = state.children.find(c => c.id === editId);
     document.getElementById("modalChildTitle").textContent = "Настроить профиль";
@@ -1666,11 +1959,14 @@ function openChildModal(editId = null) {
     document.getElementById("childNameInput").value = ch.name;
     document.getElementById("childDistrictSelect").value = ch.district || "Фрунзенский район";
     document.getElementById("childEripInput").value = ch.erip_account || "";
+    delWrap.style.display = "block";
+    document.getElementById("childDeleteBtn").onclick = () => askDeleteChild(ch.id, ch.name);
   } else {
     document.getElementById("modalChildTitle").textContent = "Новый профиль ребёнка";
     document.getElementById("childEditId").value = "";
     document.getElementById("childNameInput").value = "";
     document.getElementById("childEripInput").value = "";
+    delWrap.style.display = "none";
   }
   openModal("modalChild");
 }

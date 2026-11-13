@@ -1,10 +1,13 @@
 import argparse
 import asyncio
+import calendar
 import logging
 import os
+import re
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from aiohttp import web
 
@@ -43,6 +46,13 @@ RUSSIAN_WEEKDAYS = {
 }
 
 _client_cache: Dict[int, SchoolsClient] = {}
+_TTL_CACHE: Dict[str, Tuple[float, Any]] = {}
+
+RUSSIAN_MONTHS = {
+    1: "Январь", 2: "Февраль", 3: "Март", 4: "Апрель",
+    5: "Май", 6: "Июнь", 7: "Июль", 8: "Август",
+    9: "Сентябрь", 10: "Октябрь", 11: "Ноябрь", 12: "Декабрь",
+}
 
 
 def _resolve_tg_id(request: Optional[web.Request] = None) -> int:
@@ -331,7 +341,117 @@ async def api_delete_expense(request: web.Request) -> web.Response:
     return web.json_response({"ok": True})
 
 
-def _fetch_diary_sync(tg_id: int, child_id: int, mode: str) -> Dict[str, Any]:
+def _cache_get(key: str, ttl: int = 300) -> Optional[Any]:
+    entry = _TTL_CACHE.get(key)
+    if entry and (time.time() - entry[0]) < ttl:
+        return entry[1]
+    return None
+
+
+def _cache_set(key: str, val: Any) -> Any:
+    _TTL_CACHE[key] = (time.time(), val)
+    return val
+
+
+def _parse_attendance(att_raw: str) -> Dict[str, Any]:
+    att_clean = (att_raw or "").split("Числа вносятся")[0].strip()
+    m_tot = re.search(r"Пропущенных уроков:\s*(\d+)", att_clean)
+    m_unex = re.search(r"неуважительным причинам:\s*(\d+)", att_clean)
+    return {
+        "text": att_clean,
+        "missed_total": int(m_tot.group(1)) if m_tot else 0,
+        "missed_unexcused": int(m_unex.group(1)) if m_unex else 0,
+    }
+
+
+def _get_quarters_cached(client: SchoolsClient, pid: str, sub: str) -> Dict[str, Any]:
+    key = f"q:{sub}:{pid}"
+    cached = _cache_get(key, ttl=900)
+    if cached:
+        return cached
+    return _cache_set(key, client.get_quarters(pid, sub))
+
+
+def _get_quarter_marks_cached(client: SchoolsClient, pid: str, sub: str) -> Dict[str, Any]:
+    key = f"qm:{sub}:{pid}"
+    cached = _cache_get(key, ttl=300)
+    if cached:
+        return cached
+    return _cache_set(key, client.get_quarter_marks(pid, sub))
+
+
+def _pick_quarter_id_for_date(q_info: Dict[str, Any], target_dt: date) -> Optional[str]:
+    quarters = q_info.get("quarters") or []
+    if not quarters:
+        return q_info.get("current")
+    m = target_dt.month
+    idx = 0 if m in (9, 10) else (1 if m in (11, 12) else (2 if m in (1, 2, 3) else 3))
+    if idx < len(quarters):
+        return quarters[idx]["id"]
+    return q_info.get("current")
+
+
+def _fetch_week_for_date(
+    client: SchoolsClient, pid: str, sub: str, q_info: Dict[str, Any], monday_dt: date
+) -> Dict[str, Any]:
+    wstr = monday_dt.strftime("%Y-%m-%d")
+    key = f"wk:{sub}:{pid}:{wstr}"
+    cached = _cache_get(key, ttl=180)
+    if cached:
+        return cached
+
+    primary_qid = _pick_quarter_id_for_date(q_info, monday_dt)
+    diary = client.get_week_diary(pid, sub, quarter_id=primary_qid, week_date=wstr)
+    if not diary.get("days"):
+        # На стыке четвертей пробуем соседнюю четверть
+        for q in (q_info.get("quarters") or []):
+            if q["id"] != primary_qid:
+                alt = client.get_week_diary(pid, sub, quarter_id=q["id"], week_date=wstr)
+                if alt.get("days"):
+                    diary = alt
+                    break
+    return _cache_set(key, diary)
+
+
+def _enrich_days(days: List[Dict[str, Any]]) -> Dict[str, Any]:
+    enriched = []
+    total_lessons = 0
+    marks_list = []
+    numeric_marks = []
+
+    for d in days:
+        e_lessons = []
+        for l in d.get("lessons", []):
+            num = str(l.get("number", ""))
+            raw_mark = (l.get("mark") or "").strip()
+            e_lessons.append({**l, "time": BELLS.get(num, "")})
+            if l.get("subject"):
+                total_lessons += 1
+            if raw_mark:
+                marks_list.append({"day": d.get("title", ""), "subject": l.get("subject", ""), "mark": raw_mark})
+                for tok in re.findall(r"\d+", raw_mark):
+                    v = int(tok)
+                    if 1 <= v <= 10:
+                        numeric_marks.append(v)
+        enriched.append({
+            "title": d.get("title", ""),
+            "lesson_count": len([x for x in e_lessons if x.get("subject")]),
+            "lessons": e_lessons,
+        })
+
+    avg = round(sum(numeric_marks) / len(numeric_marks), 2) if numeric_marks else None
+    return {
+        "days": enriched,
+        "total_lessons": total_lessons,
+        "marks_list": marks_list,
+        "numeric_marks": numeric_marks,
+        "period_average": avg,
+    }
+
+
+def _fetch_diary_sync(
+    tg_id: int, child_id: int, mode: str, week_offset: int = 0, month_offset: int = 0
+) -> Dict[str, Any]:
     children = db.ensure_children_synced(tg_id)
     child = next((c for c in children if c["id"] == child_id), None)
     if not child or not child.get("pupil_id") or not child.get("subdomain"):
@@ -343,32 +463,149 @@ def _fetch_diary_sync(tg_id: int, child_id: int, mode: str) -> Dict[str, Any]:
 
     pid = str(child["pupil_id"])
     sub = str(child["subdomain"])
+    today = date.today()
+    this_monday = today - timedelta(days=today.weekday())
+
+    q_info = _get_quarters_cached(client, pid, sub)
 
     if mode == "marks":
-        q_data = client.get_quarter_marks(pid, sub)
-        return {"ok": True, "mode": "marks", "child_name": child["name"], **q_data}
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            f_qm = pool.submit(_get_quarter_marks_cached, client, pid, sub)
+            f_wk = pool.submit(_fetch_week_for_date, client, pid, sub, q_info, this_monday)
+            q_data = f_qm.result()
+            wk = f_wk.result()
+        att = _parse_attendance(wk.get("attendance", ""))
+        return {
+            "ok": True,
+            "mode": "marks",
+            "child_name": child["name"],
+            "attendance": att["text"],
+            "attendance_info": att,
+            **q_data,
+        }
 
-    now = datetime.now()
-    target_dt = now if mode == "today" else now + timedelta(days=1)
+    if mode == "week":
+        target_monday = this_monday + timedelta(weeks=week_offset)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            f_wk = pool.submit(_fetch_week_for_date, client, pid, sub, q_info, target_monday)
+            f_qm = pool.submit(_get_quarter_marks_cached, client, pid, sub)
+            diary = f_wk.result()
+            q_data = f_qm.result()
+        stats = _enrich_days(diary.get("days", []))
+        att = _parse_attendance(diary.get("attendance", ""))
+        return {
+            "ok": True,
+            "mode": "week",
+            "child_name": child["name"],
+            "week_offset": week_offset,
+            "period": diary.get("period") or target_monday.strftime("%d.%m.%Y"),
+            "days": stats["days"],
+            "total_lessons": stats["total_lessons"],
+            "week_average": stats["period_average"],
+            "marks_list": stats["marks_list"],
+            "attendance": att["text"],
+            "attendance_info": att,
+            "quarter_average": q_data.get("average") or "",
+            "quarter_behavior": q_data.get("behavior") or "",
+        }
+
+    if mode == "month":
+        # Сдвигаем (год, месяц) на month_offset
+        m_idx = (today.year * 12 + (today.month - 1)) + month_offset
+        tyear, tmonth = m_idx // 12, (m_idx % 12) + 1
+        last_day = calendar.monthrange(tyear, tmonth)[1]
+        first_dt = date(tyear, tmonth, 1)
+        last_dt = date(tyear, tmonth, last_day)
+
+        # Собираем все понедельники недель, относящихся к этому месяцу
+        mondays: List[date] = []
+        cur = first_dt - timedelta(days=first_dt.weekday())
+        while cur <= last_dt:
+            thursday = cur + timedelta(days=3)
+            if (cur.month == tmonth or thursday.month == tmonth) and cur not in mondays:
+                mondays.append(cur)
+            cur += timedelta(days=7)
+
+        with ThreadPoolExecutor(max_workers=min(6, len(mondays) + 1)) as pool:
+            f_qm = pool.submit(_get_quarter_marks_cached, client, pid, sub)
+            f_weeks = [pool.submit(_fetch_week_for_date, client, pid, sub, q_info, md) for md in mondays]
+            q_data = f_qm.result()
+            raw_weeks = [fw.result() for fw in f_weeks]
+
+        weeks_out = []
+        total_lessons = 0
+        all_marks = []
+        all_nums = []
+        missed_sum = 0
+        unexcused_sum = 0
+        seen_periods = set()
+
+        for md, wk in zip(mondays, raw_weeks):
+            per = (wk.get("period") or "").strip()
+            if per and per in seen_periods:
+                continue
+            if per:
+                seen_periods.add(per)
+            stats = _enrich_days(wk.get("days", []))
+            att = _parse_attendance(wk.get("attendance", ""))
+            total_lessons += stats["total_lessons"]
+            all_marks.extend(stats["marks_list"])
+            all_nums.extend(stats["numeric_marks"])
+            missed_sum += att["missed_total"]
+            unexcused_sum += att["missed_unexcused"]
+            weeks_out.append({
+                "monday": md.strftime("%Y-%m-%d"),
+                "period": per or md.strftime("%d.%m.%Y"),
+                "total_lessons": stats["total_lessons"],
+                "week_average": stats["period_average"],
+                "missed_total": att["missed_total"],
+                "days": stats["days"],
+            })
+
+        month_avg = round(sum(all_nums) / len(all_nums), 2) if all_nums else None
+        return {
+            "ok": True,
+            "mode": "month",
+            "child_name": child["name"],
+            "month_offset": month_offset,
+            "month_title": f"{RUSSIAN_MONTHS[tmonth]} {tyear}",
+            "total_lessons": total_lessons,
+            "month_average": month_avg,
+            "marks_list": all_marks,
+            "weeks": weeks_out,
+            "attendance_info": {
+                "missed_total": missed_sum,
+                "missed_unexcused": unexcused_sum,
+                "text": f"Пропущено за месяц: {missed_sum} ур. (неув.: {unexcused_sum})",
+            },
+            "quarter_average": q_data.get("average") or "",
+            "quarter_behavior": q_data.get("behavior") or "",
+        }
+
+    # Режим 'today' или 'tomorrow'
+    target_dt = today if mode == "today" else today + timedelta(days=1)
     wd_name = RUSSIAN_WEEKDAYS[target_dt.weekday()]
-    week_arg = target_dt.strftime("%Y-%m-%d") if (mode == "tomorrow" and target_dt.weekday() == 0) else None
-    diary = client.get_week_diary(pid, sub, week_date=week_arg)
-    days = diary.get("days", [])
-    target_day = next((d for d in days if wd_name in d.get("title", "").lower()), None)
-    lessons = []
-    if target_day:
-        for l in target_day.get("lessons", []):
-            num = str(l.get("number", ""))
-            lessons.append({**l, "time": BELLS.get(num, "")})
-    att_raw = diary.get("attendance", "") or ""
-    att_clean = att_raw.split("Числа вносятся")[0].strip()
+    target_monday = target_dt - timedelta(days=target_dt.weekday())
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        f_wk = pool.submit(_fetch_week_for_date, client, pid, sub, q_info, target_monday)
+        f_qm = pool.submit(_get_quarter_marks_cached, client, pid, sub)
+        diary = f_wk.result()
+        q_data = f_qm.result()
+
+    stats = _enrich_days(diary.get("days", []))
+    target_day = next((d for d in stats["days"] if wd_name in d.get("title", "").lower()), None)
+    lessons = target_day["lessons"] if target_day else []
+    att = _parse_attendance(diary.get("attendance", ""))
     return {
         "ok": True,
         "mode": mode,
         "child_name": child["name"],
         "day_title": target_day.get("title", wd_name.capitalize()) if target_day else wd_name.capitalize(),
         "lessons": lessons,
-        "attendance": att_clean,
+        "attendance": att["text"],
+        "attendance_info": att,
+        "quarter_average": q_data.get("average") or "",
+        "quarter_behavior": q_data.get("behavior") or "",
     }
 
 
@@ -376,6 +613,15 @@ async def api_get_diary(request: web.Request) -> web.Response:
     tg_id = _resolve_tg_id(request)
     q_cid = request.query.get("child_id")
     mode = request.query.get("mode", "today")
+    try:
+        week_offset = max(-12, min(12, int(request.query.get("week_offset", "0"))))
+    except ValueError:
+        week_offset = 0
+    try:
+        month_offset = max(-6, min(6, int(request.query.get("month_offset", "0"))))
+    except ValueError:
+        month_offset = 0
+
     if not q_cid or not q_cid.isdigit():
         children = db.ensure_children_synced(tg_id)
         linked = next((c for c in children if c.get("pupil_id")), None)
@@ -384,7 +630,7 @@ async def api_get_diary(request: web.Request) -> web.Response:
         cid = linked["id"]
     else:
         cid = int(q_cid)
-    res = await asyncio.to_thread(_fetch_diary_sync, tg_id, cid, mode)
+    res = await asyncio.to_thread(_fetch_diary_sync, tg_id, cid, mode, week_offset, month_offset)
     return web.json_response(res)
 
 
