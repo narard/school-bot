@@ -1,0 +1,1080 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+  <meta name="theme-color" content="#2563eb" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <title>Школьный пульт</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+  <style>
+    :root {
+      --bg: #f4f6fb;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --primary: #2563eb;
+      --primary-soft: #eff6ff;
+      --green: #059669;
+      --green-soft: #ecfdf5;
+      --amber: #d97706;
+      --amber-soft: #fffbeb;
+      --red: #dc2626;
+      --red-soft: #fef2f2;
+      --purple: #7c3aed;
+      --radius: 18px;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding-bottom: 84px;
+    }
+    .app-shell {
+      max-width: 480px;
+      margin: 0 auto;
+      min-height: 100vh;
+    }
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: rgba(244, 246, 251, 0.92);
+      backdrop-filter: blur(12px);
+      padding: 14px 16px 10px;
+      border-bottom: 1px solid rgba(226, 232, 240, 0.7);
+    }
+    .topbar-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 800;
+      font-size: 19px;
+      letter-spacing: -0.02em;
+    }
+    .brand-dot {
+      width: 28px;
+      height: 28px;
+      border-radius: 9px;
+      background: linear-gradient(135deg, #2563eb, #0ea5e9);
+      display: grid;
+      place-items: center;
+      color: #fff;
+      font-size: 15px;
+    }
+    .btn-pill {
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--text);
+      padding: 7px 12px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .btn-pill:active { transform: scale(0.97); }
+    .children-tabs {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      padding-bottom: 2px;
+    }
+    .children-tabs::-webkit-scrollbar { display: none; }
+    .child-chip {
+      white-space: nowrap;
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--muted);
+      padding: 7px 13px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .child-chip.active {
+      background: var(--text);
+      color: #fff;
+      border-color: var(--text);
+    }
+    .child-chip.add {
+      background: var(--primary-soft);
+      color: var(--primary);
+      border-color: #bfdbfe;
+    }
+    .content { padding: 12px 14px; }
+    .card {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 15px 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+      border: 1px solid rgba(226, 232, 240, 0.75);
+    }
+    .hero-card {
+      background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 55%, #0284c7 100%);
+      color: #fff;
+      border: none;
+      box-shadow: 0 10px 24px rgba(37, 99, 235, 0.22);
+    }
+    .hero-sub { font-size: 12px; opacity: 0.85; font-weight: 500; }
+    .hero-val { font-size: 30px; font-weight: 800; margin: 4px 0 8px; letter-spacing: -0.02em; }
+    .hero-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255,255,255,0.2);
+      font-size: 13px;
+    }
+    .sec-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 15px;
+      font-weight: 700;
+      margin: 4px 2px 10px;
+      color: var(--text);
+    }
+    .club-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 11px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .club-row:last-child { border-bottom: none; padding-bottom: 2px; }
+    .club-row:first-child { padding-top: 2px; }
+    .club-name { font-weight: 700; font-size: 15px; }
+    .club-meta { font-size: 12px; color: var(--muted); margin-top: 3px; line-height: 1.35; }
+    .club-right { text-align: right; flex-shrink: 0; }
+    .bal-amt { font-weight: 800; font-size: 16px; }
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      margin-top: 4px;
+    }
+    .badge-green { background: var(--green-soft); color: var(--green); }
+    .badge-amber { background: var(--amber-soft); color: var(--amber); }
+    .badge-red { background: var(--red-soft); color: var(--red); }
+    .badge-blue { background: var(--primary-soft); color: var(--primary); }
+    .btn {
+      width: 100%;
+      border: none;
+      border-radius: 13px;
+      padding: 12px 14px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-soft { background: var(--primary-soft); color: var(--primary); }
+    .btn-green { background: var(--green); color: #fff; }
+    .btn-sm {
+      border: none;
+      border-radius: 9px;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .btn-xs-del {
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      font-size: 13px;
+      cursor: pointer;
+      padding: 2px 6px;
+    }
+    .seg-tabs {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      background: #e2e8f0;
+      border-radius: 12px;
+      padding: 3px;
+      margin-bottom: 12px;
+    }
+    .seg-tabs.three { grid-template-columns: repeat(3, 1fr); }
+    .seg-btn {
+      border: none;
+      background: transparent;
+      padding: 8px 4px;
+      border-radius: 9px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .seg-btn.active {
+      background: var(--card);
+      color: var(--text);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+    .bar-row { margin-bottom: 10px; }
+    .bar-head { display: flex; justify-content: space-between; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+    .bar-track { height: 8px; background: #e2e8f0; border-radius: 99px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 99px; transition: width 0.3s ease; }
+    .lesson-item {
+      display: flex;
+      gap: 10px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .lesson-item:last-child { border-bottom: none; }
+    .lesson-num {
+      width: 44px;
+      flex-shrink: 0;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--primary);
+      background: var(--primary-soft);
+      border-radius: 10px;
+      padding: 6px 4px;
+      text-align: center;
+      align-self: flex-start;
+    }
+    .lesson-body { flex: 1; }
+    .lesson-subj { font-weight: 700; font-size: 14px; }
+    .lesson-hw { font-size: 12px; color: var(--muted); margin-top: 3px; }
+    .lesson-mark {
+      font-weight: 800;
+      font-size: 15px;
+      color: var(--green);
+      background: var(--green-soft);
+      padding: 4px 10px;
+      border-radius: 10px;
+      align-self: center;
+    }
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100%;
+      max-width: 480px;
+      background: rgba(255,255,255,0.95);
+      backdrop-filter: blur(12px);
+      border-top: 1px solid var(--border);
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      padding: 6px 4px calc(8px + env(safe-area-inset-bottom));
+      z-index: 30;
+    }
+    .nav-item {
+      border: none;
+      background: transparent;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 4px 0;
+    }
+    .nav-item span.ico { font-size: 19px; line-height: 1.1; }
+    .nav-item.active { color: var(--primary); }
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.45);
+      display: none;
+      align-items: flex-end;
+      justify-content: center;
+      z-index: 50;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal {
+      width: 100%;
+      max-width: 480px;
+      max-height: 88vh;
+      overflow-y: auto;
+      background: var(--card);
+      border-radius: 22px 22px 0 0;
+      padding: 18px 16px 26px;
+      box-shadow: 0 -10px 30px rgba(0,0,0,0.15);
+    }
+    .modal-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .modal-title { font-size: 17px; font-weight: 800; }
+    .field { margin-bottom: 12px; }
+    .field label { display: block; font-size: 12px; font-weight: 700; color: var(--muted); margin-bottom: 5px; }
+    .input, select {
+      width: 100%;
+      padding: 11px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      font-size: 14px;
+      background: #f8fafc;
+      color: var(--text);
+      outline: none;
+    }
+    .input:focus, select:focus { border-color: var(--primary); background: #fff; }
+    .search-list {
+      max-height: 210px;
+      overflow-y: auto;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      margin-bottom: 10px;
+    }
+    .search-opt {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+    }
+    .search-opt:last-child { border-bottom: none; }
+    .search-opt:hover { background: var(--primary-soft); }
+    .search-opt-name { font-weight: 700; font-size: 13px; }
+    .search-opt-cat { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .toast {
+      position: fixed;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #0f172a;
+      color: #fff;
+      padding: 10px 16px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+      z-index: 80;
+      display: none;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+    }
+    .muted-empty { text-align: center; color: var(--muted); font-size: 13px; padding: 18px 8px; }
+  </style>
+</head>
+<body>
+<div class="toast" id="toast"></div>
+<div class="app-shell">
+  <div class="topbar">
+    <div class="topbar-row">
+      <div class="brand">
+        <div class="brand-dot">🎓</div>
+        <span>Школьный пульт</span>
+      </div>
+      <button class="btn-pill" id="btnRefreshAll" onclick="refreshAllErip()">🔄 ЕРИП</button>
+    </div>
+    <div class="children-tabs" id="childrenTabs"></div>
+  </div>
+
+  <div class="content" id="mainContent">
+    <div class="card muted-empty">Загрузка данных...</div>
+  </div>
+</div>
+
+<nav class="bottom-nav">
+  <button class="nav-item active" data-tab="overview" onclick="switchTab('overview')"><span class="ico">🏠</span>Пульт</button>
+  <button class="nav-item" data-tab="clubs" onclick="switchTab('clubs')"><span class="ico">💳</span>Кружки/ЕРИП</button>
+  <button class="nav-item" data-tab="expenses" onclick="switchTab('expenses')"><span class="ico">📊</span>Расходы</button>
+  <button class="nav-item" data-tab="diary" onclick="switchTab('diary')"><span class="ico">📚</span>Дневник</button>
+</nav>
+
+<!-- Модалка: Ребёнок -->
+<div class="modal-backdrop" id="modalChild">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title" id="modalChildTitle">Добавить ребёнка</div>
+      <button class="btn-pill" onclick="closeModal('modalChild')">✕</button>
+    </div>
+    <input type="hidden" id="childEditId" />
+    <div class="field">
+      <label>Имя ребёнка</label>
+      <input class="input" id="childNameInput" placeholder="Например: Иван" />
+    </div>
+    <div class="field">
+      <label>Район Минска (для столовой и школьных кружков)</label>
+      <select id="childDistrictSelect"></select>
+    </div>
+    <div class="field">
+      <label>10-значный счёт ученика в ЕРИП (необязательно)</label>
+      <input class="input" id="childEripInput" placeholder="Например: 1260332033" inputmode="numeric" />
+    </div>
+    <button class="btn btn-primary" onclick="saveChild()">Сохранить и проверить ЕРИП</button>
+  </div>
+</div>
+
+<!-- Модалка: Добавить любой кружок Минска -->
+<div class="modal-backdrop" id="modalClub">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title">Добавить кружок или секцию</div>
+      <button class="btn-pill" onclick="closeModal('modalClub')">✕</button>
+    </div>
+    <div class="field">
+      <label>Для кого</label>
+      <select id="clubChildSelect"></select>
+    </div>
+    <div class="field">
+      <label>Поиск по кружкам Минска в ЕРИП (~700+ организаций)</label>
+      <div style="display:flex;gap:6px;">
+        <input class="input" id="clubSearchInput" placeholder="Введите название: КодЭндБот, танцы, IT..." oninput="debouncedClubSearch()" />
+        <button class="btn-pill" onclick="searchClubs(true)" title="Обновить каталог из ЕРИП">🔄</button>
+      </div>
+    </div>
+    <div class="search-list" id="clubSearchResults">
+      <div class="muted-empty">Начните вводить название кружка</div>
+    </div>
+
+    <div id="clubStepDetails" style="display:none; border-top:1px solid var(--border); padding-top:12px;">
+      <div class="field">
+        <label>Выбранная организация</label>
+        <div id="clubSelectedOrgLabel" style="font-weight:700;font-size:14px;"></div>
+      </div>
+      <div class="field" id="clubServicePickerWrap" style="display:none;">
+        <label>Услуга в ЕРИП</label>
+        <select id="clubServiceSelect" onchange="onSelectSubService()"></select>
+      </div>
+      <div class="field">
+        <label id="clubAccLabel">Номер договора / счёта</label>
+        <div style="display:flex;gap:6px;">
+          <input class="input" id="clubAccInput" placeholder="Например: 26401" />
+          <button class="btn-pill" onclick="verifyClubErip()">Проверить</button>
+        </div>
+        <div id="clubVerifyResult" style="font-size:12px;margin-top:6px;"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div class="field">
+          <label>Абонемент в месяц (BYN)</label>
+          <input class="input" id="clubAmountInput" type="number" step="0.01" placeholder="Если нет в ЕРИП" />
+        </div>
+        <div class="field">
+          <label>Платить до числа</label>
+          <input class="input" id="clubDueDayInput" type="number" min="1" max="31" placeholder="Например: 10" />
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="saveClub()">Привязать к ребёнку</button>
+    </div>
+  </div>
+</div>
+
+<!-- Модалка: Записать расход вручную -->
+<div class="modal-backdrop" id="modalExpense">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title">Записать расход</div>
+      <button class="btn-pill" onclick="closeModal('modalExpense')">✕</button>
+    </div>
+    <div class="field">
+      <label>Ребёнок</label>
+      <select id="expChildSelect"></select>
+    </div>
+    <div class="field">
+      <label>Категория</label>
+      <select id="expCatSelect">
+        <option value="textbooks">📚 Учебники / тетради</option>
+        <option value="club">🤖 Кружок / секция</option>
+        <option value="canteen">🥗 Столовая</option>
+        <option value="buffet">🥐 Буфет</option>
+        <option value="other">📌 Сборы / экскурсии / форма</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>На что потрачено</label>
+      <input class="input" id="expTitleInput" placeholder="Например: Рабочая тетрадь по англ." />
+    </div>
+    <div class="field">
+      <label>Сумма (BYN)</label>
+      <input class="input" id="expAmtInput" type="number" step="0.01" placeholder="25.50" />
+    </div>
+    <button class="btn btn-primary" onclick="saveExpense()">Добавить в статистику</button>
+  </div>
+</div>
+
+<script>
+const state = {
+  children: [],
+  clubs: [],
+  districts: [],
+  selectedChildId: null, // null = Все дети
+  activeTab: "overview",
+  expPeriod: "month",
+  diaryMode: "today",
+  expenses: null,
+  diary: null,
+  selectedOrg: null,
+  selectedService: null,
+  inspectServices: [],
+  searchItems: [],
+};
+
+function fmtByn(v) {
+  if (v === null || v === undefined || isNaN(v)) return "—";
+  return Number(v).toFixed(2).replace(".", ",") + " BYN";
+}
+
+function esc(str) {
+  return String(str || "").replace(/[&<>"']/g, s => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[s]));
+}
+
+function showToast(msg) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.style.display = "block";
+  clearTimeout(window._toastTimer);
+  window._toastTimer = setTimeout(() => { el.style.display = "none"; }, 2600);
+}
+
+async function api(url, opts = {}) {
+  const res = await fetch(url, opts);
+  return await res.json();
+}
+
+async function loadBootstrap() {
+  const data = await api("/api/bootstrap");
+  if (!data.ok) return;
+  state.children = data.children || [];
+  state.clubs = data.clubs || [];
+  state.districts = data.districts || [];
+  state.expenses = data.month_expenses;
+  if (state.selectedChildId && !state.children.some(c => c.id === state.selectedChildId)) {
+    state.selectedChildId = null;
+  }
+  renderTopTabs();
+  renderCurrentTab();
+}
+
+function renderTopTabs() {
+  const wrap = document.getElementById("childrenTabs");
+  let html = `<button class="child-chip ${state.selectedChildId === null ? "active" : ""}" onclick="selectChild(null)">Все дети</button>`;
+  for (const c of state.children) {
+    const active = state.selectedChildId === c.id ? "active" : "";
+    html += `<button class="child-chip ${active}" onclick="selectChild(${c.id})">${esc(c.name)}</button>`;
+  }
+  html += `<button class="child-chip add" onclick="openChildModal()">+ Ребёнок</button>`;
+  wrap.innerHTML = html;
+}
+
+function selectChild(cid) {
+  state.selectedChildId = cid;
+  renderTopTabs();
+  if (state.activeTab === "expenses") loadExpenses();
+  else if (state.activeTab === "diary") loadDiary();
+  else renderCurrentTab();
+}
+
+function switchTab(tab) {
+  state.activeTab = tab;
+  document.querySelectorAll(".nav-item").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+  if (tab === "expenses") loadExpenses();
+  else if (tab === "diary") loadDiary();
+  else renderCurrentTab();
+}
+
+function filteredClubs() {
+  if (state.selectedChildId === null) return state.clubs;
+  return state.clubs.filter(c => c.child_id === state.selectedChildId);
+}
+
+function childNameById(cid) {
+  const c = state.children.find(x => x.id === cid);
+  return c ? c.name : "Ученик";
+}
+
+function dueBadgeHtml(club) {
+  if (club.kind === "school_club") {
+    const bal = club.last_balance;
+    if (bal === null || bal === undefined) return `<span class="badge badge-blue">ЕРИП авто</span>`;
+    if (bal < 0) return `<span class="badge badge-red">Долг</span>`;
+    if (bal === 0) return `<span class="badge badge-blue">Нет долга</span>`;
+    return `<span class="badge badge-amber">К оплате</span>`;
+  }
+  if (club.kind === "canteen" || club.kind === "buffet") {
+    const bal = club.last_balance;
+    if (bal === null || bal === undefined) return `<span class="badge badge-blue">ЕРИП авто</span>`;
+    if (bal < 0) return `<span class="badge badge-red">Долг</span>`;
+    if (bal <= (club.alert_threshold || 5)) return `<span class="badge badge-amber">Пора пополнить</span>`;
+    return `<span class="badge badge-green">В норме</span>`;
+  }
+  if (club.due_status === "paid") return `<span class="badge badge-green">✅ Оплачено</span>`;
+  if (club.due_status === "overdue") return `<span class="badge badge-red">Просрочено (до ${club.due_day})</span>`;
+  if (club.due_status === "urgent") return `<span class="badge badge-red">Завтра / сегодня срок!</span>`;
+  if (club.due_status === "soon") return `<span class="badge badge-amber">Осталось ${club.days_left} дн.</span>`;
+  if (club.due_day) return `<span class="badge badge-blue">До ${club.due_day}-го числа</span>`;
+  return `<span class="badge badge-blue">Привязан</span>`;
+}
+
+function renderClubRow(club, allowActions = true) {
+  const isSchoolPack = ["canteen", "buffet", "school_club"].includes(club.kind);
+  const balTxt = club.last_balance !== null && club.last_balance !== undefined
+    ? fmtByn(club.last_balance)
+    : (club.monthly_amount ? fmtByn(club.monthly_amount) : (club.last_to_pay > 0 ? fmtByn(club.last_to_pay) : "—"));
+  const subChild = state.selectedChildId === null ? `<b>${esc(childNameById(club.child_id))}</b> • ` : "";
+  const fioTxt = club.last_erip_fio ? ` • ${esc(club.last_erip_fio)}` : "";
+  const remindTxt = (!isSchoolPack && club.due_day) ? `<br/>🔔 Напоминания: 1-го, за 5 и за 1 дн.` : "";
+  const confirmBtn = (!isSchoolPack && !club.paid_this_month)
+    ? `<button class="btn-sm" style="background:var(--green-soft);color:var(--green);margin-top:6px;" onclick="confirmPay(${club.id}, ${club.monthly_amount || club.last_to_pay || 0})">✅ Оплатил</button>`
+    : "";
+  const delBtn = allowActions
+    ? `<button class="btn-xs-del" onclick="deleteClub(${club.id})" title="Удалить">🗑</button>`
+    : "";
+
+  return `
+    <div class="club-row">
+      <div>
+        <div class="club-name">${esc(club.org_name)} ${delBtn}</div>
+        <div class="club-meta">${subChild}${esc(club.service_name)} • Счёт <code>${esc(club.account_number)}</code>${fioTxt}${remindTxt}</div>
+      </div>
+      <div class="club-right">
+        <div class="bal-amt">${balTxt}</div>
+        <div>${dueBadgeHtml(club)}</div>
+        ${confirmBtn}
+      </div>
+    </div>
+  `;
+}
+
+function renderCurrentTab() {
+  const el = document.getElementById("mainContent");
+  if (state.activeTab === "overview") {
+    const clubs = filteredClubs();
+    const totalBal = clubs.reduce((s, c) => s + (c.last_balance || 0), 0);
+    const schoolBalCount = clubs.filter(c => c.last_balance !== null && c.last_balance !== undefined).length;
+    const dueClubs = clubs.filter(c => !["canteen","buffet","school_club"].includes(c.kind) && c.due_day && !c.paid_this_month);
+    const activeChild = state.children.find(c => c.id === state.selectedChildId);
+
+    let html = `
+      <div class="card hero-card">
+        <div class="hero-sub">${activeChild ? esc(activeChild.name) : "Все дети семьи"} • Остаток на школьных счетах</div>
+        <div class="hero-val">${schoolBalCount ? fmtByn(totalBal) : "Счета не привязаны"}</div>
+        <div class="hero-grid">
+          <div>💸 Траты за месяц<br><b>${fmtByn(state.expenses ? state.expenses.total : 0)}</b></div>
+          <div>📅 Ожидает оплаты<br><b>${dueClubs.length} кружков</b></div>
+        </div>
+      </div>
+    `;
+
+    if (activeChild) {
+      html += `
+        <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <div style="font-weight:700;font-size:14px;">👤 ${esc(activeChild.name)}</div>
+            <div style="font-size:12px;color:var(--muted);">${esc(activeChild.district || "Фрунзенский район")}${activeChild.erip_account ? " • ЕРИП " + esc(activeChild.erip_account) : ""}</div>
+          </div>
+          <button class="btn-pill" onclick="openChildModal(${activeChild.id})">✏️ Изменить</button>
+        </div>
+      `;
+    }
+
+    if (dueClubs.length) {
+      html += `<div class="sec-title"><span>⏰ Ближайшие оплаты кружков</span></div><div class="card">`;
+      html += dueClubs.map(c => renderClubRow(c, false)).join("");
+      html += `</div>`;
+    }
+
+    html += `<div class="sec-title"><span>💳 Балансы и секции</span><button class="btn-pill" onclick="openClubModal()">+ Кружок</button></div><div class="card">`;
+    html += clubs.length
+      ? clubs.map(c => renderClubRow(c, false)).join("")
+      : `<div class="muted-empty">Пока ничего не привязано.<br><br><button class="btn btn-soft" onclick="openChildModal()">➕ Привязать школьный счёт ЕРИП</button></div>`;
+    html += `</div>`;
+
+    el.innerHTML = html;
+  } else if (state.activeTab === "clubs") {
+    const clubs = filteredClubs();
+    const school = clubs.filter(c => ["canteen", "buffet", "school_club"].includes(c.kind));
+    const extra = clubs.filter(c => !["canteen", "buffet", "school_club"].includes(c.kind));
+
+    let html = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
+        <button class="btn btn-primary" onclick="openClubModal()">➕ Добавить кружок</button>
+        <button class="btn btn-soft" onclick="openChildModal()">👤 Школьный счёт</button>
+      </div>
+      <div class="sec-title"><span>🍽 Школа (столовая, буфет, кружки УО)</span></div>
+      <div class="card">${school.length ? school.map(c => renderClubRow(c, true)).join("") : `<div class="muted-empty">Нажмите «Школьный счёт» и введите 10-значный номер ученика</div>`}</div>
+      <div class="sec-title"><span>🤖 Внешкольные кружки и секции</span></div>
+      <div class="card">${extra.length ? extra.map(c => renderClubRow(c, true)).join("") : `<div class="muted-empty">Найдите любой кружок Минска (КодЭндБот, танцы, спорт) через «Добавить кружок»</div>`}</div>
+    `;
+    el.innerHTML = html;
+  } else if (state.activeTab === "expenses") {
+    renderExpensesTab();
+  } else if (state.activeTab === "diary") {
+    renderDiaryTab();
+  }
+}
+
+async function loadExpenses() {
+  const qChild = state.selectedChildId !== null ? `&child_id=${state.selectedChildId}` : "";
+  const data = await api(`/api/expenses?period=${state.expPeriod}${qChild}`);
+  if (data.ok) {
+    state.expenses = data;
+    renderExpensesTab();
+  }
+}
+
+function setExpPeriod(p) {
+  state.expPeriod = p;
+  loadExpenses();
+}
+
+function renderExpensesTab() {
+  const el = document.getElementById("mainContent");
+  const ex = state.expenses || { total: 0, by_category: {}, items: [] };
+  const periods = [
+    ["week", "Неделя"],
+    ["month", "Месяц"],
+    ["quarter", "Четверть"],
+    ["year", "Год"],
+  ];
+  const cats = [
+    ["canteen", "🥗 Столовая", "#2563eb"],
+    ["buffet", "🥐 Буфет", "#f59e0b"],
+    ["club", "🤖 Кружки", "#7c3aed"],
+    ["textbooks", "📚 Учебники", "#059669"],
+    ["other", "📌 Прочее", "#64748b"],
+  ];
+  const total = ex.total || 0;
+
+  let html = `
+    <div class="seg-tabs">
+      ${periods.map(([k, lbl]) => `<button class="seg-btn ${state.expPeriod === k ? "active" : ""}" onclick="setExpPeriod('${k}')">${lbl}</button>`).join("")}
+    </div>
+    <div class="card">
+      <div style="font-size:12px;color:var(--muted);font-weight:700;">ВСЕГО РАСХОДОВ (${ex.start_date || ""} — ${ex.end_date || ""})</div>
+      <div style="font-size:28px;font-weight:800;margin:4px 0 14px;">${fmtByn(total)}</div>
+      ${cats.map(([k, lbl, col]) => {
+        const val = (ex.by_category || {})[k] || 0;
+        const pct = total > 0 ? Math.min(100, Math.round((val / total) * 100)) : 0;
+        return `
+          <div class="bar-row">
+            <div class="bar-head"><span>${lbl}</span><span>${fmtByn(val)} (${pct}%)</span></div>
+            <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${col};"></div></div>
+          </div>
+        `;
+      }).join("")}
+      <button class="btn btn-soft" style="margin-top:8px;" onclick="openExpenseModal()">➕ Записать разовый расход (учебники, сборы)</button>
+    </div>
+    <div class="sec-title"><span>🧾 История операций</span></div>
+    <div class="card">
+  `;
+  if (!ex.items || !ex.items.length) {
+    html += `<div class="muted-empty">Пока нет записей за этот период. Нажмите «🔄 ЕРИП» сверху, чтобы подтянуть данные столовой.</div>`;
+  } else {
+    html += ex.items.map(it => `
+      <div class="club-row">
+        <div>
+          <div class="club-name" style="font-size:14px;">${esc(it.title)} <button class="btn-xs-del" onclick="deleteExpense(${it.id})">✕</button></div>
+          <div class="club-meta">${esc(childNameById(it.child_id))} • ${esc(it.expense_date)} • ${it.source === "manual" ? "Вручную" : (it.source === "club_confirm" ? "Оплата кружка" : "Авто ЕРИП")}</div>
+        </div>
+        <div class="club-right"><div class="bal-amt" style="font-size:15px;">${fmtByn(it.amount)}</div></div>
+      </div>
+    `).join("");
+  }
+  html += `</div>`;
+  el.innerHTML = html;
+}
+
+async function loadDiary() {
+  const el = document.getElementById("mainContent");
+  el.innerHTML = `<div class="card muted-empty">Загружаю дневник Schools.by...</div>`;
+  const qChild = state.selectedChildId !== null ? `&child_id=${state.selectedChildId}` : "";
+  const data = await api(`/api/diary?mode=${state.diaryMode}${qChild}`);
+  state.diary = data;
+  renderDiaryTab();
+}
+
+function setDiaryMode(m) {
+  state.diaryMode = m;
+  loadDiary();
+}
+
+function renderDiaryTab() {
+  const el = document.getElementById("mainContent");
+  const d = state.diary || {};
+  let html = `
+    <div class="seg-tabs three">
+      <button class="seg-btn ${state.diaryMode === "today" ? "active" : ""}" onclick="setDiaryMode('today')">Сегодня</button>
+      <button class="seg-btn ${state.diaryMode === "tomorrow" ? "active" : ""}" onclick="setDiaryMode('tomorrow')">Завтра</button>
+      <button class="seg-btn ${state.diaryMode === "marks" ? "active" : ""}" onclick="setDiaryMode('marks')">Четвертные</button>
+    </div>
+  `;
+
+  if (!d.ok) {
+    html += `<div class="card muted-empty">${esc(d.error || "Нет данных дневника")}</div>`;
+    el.innerHTML = html;
+    return;
+  }
+
+  if (d.mode === "marks") {
+    html += `
+      <div class="card">
+        <div style="font-weight:800;font-size:16px;margin-bottom:4px;">📊 ${esc(d.child_name)}</div>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:10px;">Средний балл: <b>${esc(d.average || "—")}</b>${d.behavior ? " • Поведение: <b>" + esc(d.behavior) + "</b>" : ""}</div>
+        ${(d.subjects || []).map(s => `
+          <div class="club-row">
+            <div><div class="club-name" style="font-size:14px;">${esc(s.subject)}</div><div class="club-meta">${esc((s.marks || []).join(" | "))}</div></div>
+            <div class="club-right"><span class="badge badge-blue">${esc((s.marks || [])[0] || "—")}</span></div>
+          </div>
+        `).join("")}
+      </div>
+    `;
+  } else {
+    html += `
+      <div class="card">
+        <div style="font-weight:800;font-size:16px;margin-bottom:2px;">📅 ${esc(d.day_title)} (${esc(d.child_name)})</div>
+        ${d.attendance ? `<div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Посещаемость: ${esc(d.attendance)}</div>` : `<div style="margin-bottom:10px;"></div>`}
+        ${(d.lessons && d.lessons.length) ? d.lessons.map(l => `
+          <div class="lesson-item">
+            <div class="lesson-num">${esc(l.number || "•")}<br><span style="font-weight:500;font-size:10px;">${esc((l.time || "").split("–")[0])}</span></div>
+            <div class="lesson-body">
+              <div class="lesson-subj">${esc(l.subject)}</div>
+              ${l.homework ? `<div class="lesson-hw">📝 ${esc(l.homework)}</div>` : ""}
+            </div>
+            ${l.mark ? `<div class="lesson-mark">${esc(l.mark)}</div>` : ""}
+          </div>
+        `).join("") : `<div class="muted-empty">Уроков нет или расписание пустое</div>`}
+      </div>
+    `;
+  }
+  el.innerHTML = html;
+}
+
+async function refreshAllErip() {
+  const btn = document.getElementById("btnRefreshAll");
+  btn.textContent = "⏳ ЕРИП...";
+  const qChild = state.selectedChildId !== null ? `?child_id=${state.selectedChildId}` : "";
+  await api(`/api/clubs/refresh_all${qChild}`, { method: "POST" });
+  await loadBootstrap();
+  btn.textContent = "🔄 ЕРИП";
+  showToast("Данные ЕРИП обновлены");
+}
+
+async function confirmPay(clubId, defaultAmt) {
+  const raw = prompt("Подтвердить оплату за текущий месяц (BYN):", defaultAmt || "");
+  if (raw === null) return;
+  const res = await api(`/api/clubs/${clubId}/confirm_pay`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ amount: raw ? parseFloat(raw.replace(",", ".")) : null }),
+  });
+  if (res.ok) {
+    showToast("✅ Оплата записана в статистику");
+    await loadBootstrap();
+  }
+}
+
+async function deleteClub(clubId) {
+  if (!confirm("Удалить этот кружок/счёт?")) return;
+  await api(`/api/clubs/${clubId}`, { method: "DELETE" });
+  await loadBootstrap();
+}
+
+function openModal(id) { document.getElementById(id).classList.add("open"); }
+function closeModal(id) { document.getElementById(id).classList.remove("open"); }
+
+function openChildModal(editId = null) {
+  const sel = document.getElementById("childDistrictSelect");
+  sel.innerHTML = state.districts.map(d => `<option value="${esc(d)}">${esc(d)}</option>`).join("");
+  if (editId) {
+    const ch = state.children.find(c => c.id === editId);
+    document.getElementById("modalChildTitle").textContent = "Редактировать ребёнка";
+    document.getElementById("childEditId").value = ch.id;
+    document.getElementById("childNameInput").value = ch.name;
+    document.getElementById("childDistrictSelect").value = ch.district || "Фрунзенский район";
+    document.getElementById("childEripInput").value = ch.erip_account || "";
+  } else {
+    document.getElementById("modalChildTitle").textContent = "Добавить ребёнка";
+    document.getElementById("childEditId").value = "";
+    document.getElementById("childNameInput").value = "";
+    document.getElementById("childEripInput").value = "";
+  }
+  openModal("modalChild");
+}
+
+async function saveChild() {
+  const id = document.getElementById("childEditId").value;
+  const name = document.getElementById("childNameInput").value.trim();
+  const district = document.getElementById("childDistrictSelect").value;
+  const erip_account = document.getElementById("childEripInput").value.trim();
+  if (!name) return alert("Введите имя ребёнка");
+  showToast("Сохраняю и проверяю ЕРИП...");
+  const res = await api("/api/children", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id: id ? parseInt(id) : null, name, district, erip_account }),
+  });
+  if (!res.ok) return alert(res.error || "Ошибка");
+  closeModal("modalChild");
+  await loadBootstrap();
+  showToast("Профиль сохранён");
+}
+
+function openClubModal() {
+  if (!state.children.length) {
+    alert("Сначала добавьте профиль ребёнка");
+    return openChildModal();
+  }
+  const sel = document.getElementById("clubChildSelect");
+  sel.innerHTML = state.children.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join("");
+  if (state.selectedChildId) sel.value = state.selectedChildId;
+  document.getElementById("clubSearchInput").value = "";
+  document.getElementById("clubStepDetails").style.display = "none";
+  document.getElementById("clubSearchResults").innerHTML = `<div class="muted-empty">Загружаю кружки Минска...</div>`;
+  openModal("modalClub");
+  searchClubs(false);
+}
+
+let _searchTimer = null;
+function debouncedClubSearch() {
+  clearTimeout(_searchTimer);
+  _searchTimer = setTimeout(() => searchClubs(false), 260);
+}
+
+async function searchClubs(force) {
+  const q = document.getElementById("clubSearchInput").value.trim();
+  const data = await api(`/api/erip/search?q=${encodeURIComponent(q)}&force=${force ? "1" : "0"}`);
+  const wrap = document.getElementById("clubSearchResults");
+  const items = data.items || [];
+  state.searchItems = items;
+  if (!items.length) {
+    wrap.innerHTML = `<div class="muted-empty">Ничего не найдено</div>`;
+    return;
+  }
+  wrap.innerHTML = items.map((it, idx) => `
+    <div class="search-opt" onclick="pickOrg(${idx})">
+      <div class="search-opt-name">${esc(it.name)}</div>
+      <div class="search-opt-cat">${esc(it.category)}</div>
+    </div>
+  `).join("");
+}
+
+async function pickOrg(idx) {
+  const org = state.searchItems[idx];
+  if (!org) return;
+  state.selectedOrg = org;
+  document.getElementById("clubSelectedOrgLabel").textContent = org.name;
+  document.getElementById("clubVerifyResult").innerHTML = "";
+  document.getElementById("clubStepDetails").style.display = "block";
+  const data = await api(`/api/erip/inspect?code=${encodeURIComponent(org.code)}&di_type=${encodeURIComponent(org.di_type)}`);
+  if (!data.ok) {
+    alert(data.error || "Ошибка чтения услуги ЕРИП");
+    return;
+  }
+  const svcWrap = document.getElementById("clubServicePickerWrap");
+  if (data.type === "list") {
+    state.inspectServices = data.services || [];
+    svcWrap.style.display = "block";
+    document.getElementById("clubServiceSelect").innerHTML = state.inspectServices.map((s, i) => `<option value="${i}">${esc(s.name)}</option>`).join("");
+    await onSelectSubService();
+  } else {
+    svcWrap.style.display = "none";
+    state.selectedService = data.service;
+    document.getElementById("clubAccLabel").textContent = data.service.field_name || "Номер счёта / договора";
+  }
+}
+
+async function onSelectSubService() {
+  const idx = parseInt(document.getElementById("clubServiceSelect").value || "0");
+  const svc = state.inspectServices[idx];
+  if (!svc) return;
+  const data = await api(`/api/erip/inspect?code=${encodeURIComponent(svc.code)}&di_type=${encodeURIComponent(svc.di_type)}`);
+  if (data.ok && data.type === "leaf") {
+    state.selectedService = data.service;
+    document.getElementById("clubAccLabel").textContent = data.service.field_name || "Номер счёта / договора";
+  }
+}
+
+async function verifyClubErip() {
+  if (!state.selectedService) return;
+  const acc = document.getElementById("clubAccInput").value.trim();
+  const resEl = document.getElementById("clubVerifyResult");
+  resEl.innerHTML = "⏳ Проверяю в ЕРИП...";
+  const data = await api("/api/erip/verify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code: state.selectedService.code, di_type: state.selectedService.di_type, account_number: acc }),
+  });
+  if (data.ok) {
+    const info = [data.fio ? `👤 ${esc(data.fio)}` : "", data.balance !== null ? `Баланс: ${fmtByn(data.balance)}` : `К оплате: ${fmtByn(data.to_pay || 0)}`].filter(Boolean).join(" • ");
+    resEl.innerHTML = `<span style="color:var(--green);font-weight:700;">✅ Найдено: ${info || "счёт принят"}</span>`;
+  } else {
+    resEl.innerHTML = `<span style="color:var(--red);font-weight:700;">❌ ${esc(data.error)}</span>`;
+  }
+}
+
+async function saveClub() {
+  if (!state.selectedOrg || !state.selectedService) return alert("Сначала выберите кружок из списка");
+  const child_id = parseInt(document.getElementById("clubChildSelect").value);
+  const account_number = document.getElementById("clubAccInput").value.trim();
+  const monthly_amount = document.getElementById("clubAmountInput").value;
+  const due_day = document.getElementById("clubDueDayInput").value;
+  if (!account_number) return alert("Введите номер договора / лицевой счёт");
+  showToast("Проверяю и сохраняю кружок...");
+  const res = await api("/api/clubs", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      child_id,
+      org_name: state.selectedOrg.name,
+      service_name: state.selectedService.name,
+      erip_code: state.selectedService.code,
+      di_type: state.selectedService.di_type,
+      account_number,
+      monthly_amount,
+      due_day,
+    }),
+  });
+  if (!res.ok) return alert(res.error || "Ошибка привязки");
+  closeModal("modalClub");
+  await loadBootstrap();
+  showToast("✅ Кружок привязан!");
+}
+
+function openExpenseModal() {
+  if (!state.children.length) return openChildModal();
+  const sel = document.getElementById("expChildSelect");
+  sel.innerHTML = state.children.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join("");
+  if (state.selectedChildId) sel.value = state.selectedChildId;
+  document.getElementById("expTitleInput").value = "";
+  document.getElementById("expAmtInput").value = "";
+  openModal("modalExpense");
+}
+
+async function saveExpense() {
+  const child_id = parseInt(document.getElementById("expChildSelect").value);
+  const category = document.getElementById("expCatSelect").value;
+  const title = document.getElementById("expTitleInput").value.trim();
+  const amount = parseFloat((document.getElementById("expAmtInput").value || "0").replace(",", "."));
+  const res = await api("/api/expenses", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ child_id, category, title, amount }),
+  });
+  if (!res.ok) return alert(res.error || "Ошибка");
+  closeModal("modalExpense");
+  await loadExpenses();
+  showToast("Расход добавлен");
+}
+
+async function deleteExpense(id) {
+  await api(`/api/expenses/${id}`, { method: "DELETE" });
+  loadExpenses();
+}
+
+loadBootstrap();
+</script>
+</body>
+</html>

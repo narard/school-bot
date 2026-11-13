@@ -1,7 +1,10 @@
 import html
+import json
 import logging
+import os
 import re
-from concurrent.futures import ThreadPoolExecutor
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional
 
 import requests
@@ -13,6 +16,29 @@ ERIP_HEADERS = {
     "Origin": "https://erip.paritetbank.by",
     "Referer": "https://erip.paritetbank.by/",
     "Content-Type": "application/json",
+}
+
+CATALOG_CACHE_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "minsk_erip_clubs.json")
+CATALOG_TTL_SECONDS = 7 * 24 * 3600
+
+# Корневые ветки Минска с кружками, секциями и школьными услугами
+MINSK_CLUB_BRANCHES = [
+    ("Доп. образование", "11000892095"),
+    ("Спорт и секции", "11000891420"),
+    ("УО районов", "11000965562"),
+]
+
+# Карта школьных кружков в УО 9 районов Минска
+MINSK_UO_SCHOOL_CLUBS: Dict[str, str] = {
+    "Фрунзенский район": "10004739481",
+    "Заводской район": "10000004081",
+    "Ленинский район": "10005180261",
+    "Московский район": "10004927181",
+    "Октябрьский район": "10004342261",
+    "Партизанский район": "10000379091",
+    "Первомайский район": "10004335631",
+    "Советский район": "10000404921",
+    "Центральный район": "10000394291",
 }
 
 MINSK_KSHP_DISTRICTS: Dict[str, Dict[str, str]] = {
@@ -281,3 +307,165 @@ def format_meal_message(
         f"\n<i>Путь ЕРИП: Образование → Организации шк. питания → Минск → КШП → {safe_district}</i>"
     )
     return "\n".join(lines)
+
+
+def _post_pay_list(session: requests.Session, code: str, di_type: str = "9120", timeout: int = 12) -> Any:
+    r = session.post(
+        ERIP_PAY_LIST_URL,
+        json={"version": "3", "test": False, "di_type": str(di_type), "pay_code": str(code)},
+        timeout=timeout,
+    )
+    r.raise_for_status()
+    return r.json().get("pay_record")
+
+
+def sync_minsk_clubs_catalog(force: bool = False) -> List[Dict[str, Any]]:
+    """Download and cache Minsk club/education/sport organizations from ERIP."""
+    if not force and os.path.exists(CATALOG_CACHE_PATH):
+        try:
+            age = time.time() - os.path.getmtime(CATALOG_CACHE_PATH)
+            if age < CATALOG_TTL_SECONDS:
+                with open(CATALOG_CACHE_PATH, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if isinstance(data, list) and data:
+                    return data
+        except Exception:
+            pass
+
+    session = requests.Session()
+    session.headers.update(ERIP_HEADERS)
+    catalog: List[Dict[str, Any]] = []
+    seen_codes = set()
+
+    # 1. Школьные кружки УО 9 районов Минска
+    for dist_name, club_code in MINSK_UO_SCHOOL_CLUBS.items():
+        short_d = dist_name.replace(" район", "")
+        catalog.append(
+            {
+                "code": club_code,
+                "di_type": "9191",
+                "name": f"Школьные кружки — УО {short_d} р-н",
+                "category": "Школьные кружки (УО)",
+                "is_leaf": True,
+            }
+        )
+        seen_codes.add(club_code)
+
+    # 2. Обходим ветки Доп. образования и Спорта -> Минск
+    sub_tasks = []
+    for root_label, root_code in [("Доп. образование", "11000892095"), ("Спорт", "11000891420")]:
+        try:
+            cats = _post_pay_list(session, root_code, "9120")
+            if isinstance(cats, list):
+                for cat in cats:
+                    sub_tasks.append((root_label, cat))
+        except Exception as e:
+            logger.warning(f"Catalog fetch root {root_label} error: {e}")
+
+    def fetch_minsk_orgs(task):
+        root_label, cat = task
+        res_orgs = []
+        try:
+            regions = _post_pay_list(session, cat["code"], cat.get("di_type", "9120"))
+            if not isinstance(regions, list):
+                return []
+            minsk_nodes = [x for x in regions if x.get("name") == "Минск"]
+            for mnode in minsk_nodes:
+                orgs = _post_pay_list(session, mnode["code"], mnode.get("di_type", "9120"))
+                if isinstance(orgs, list):
+                    for org in orgs:
+                        res_orgs.append(
+                            {
+                                "code": str(org.get("code", "")),
+                                "di_type": str(org.get("di_type", "9120")),
+                                "name": str(org.get("name", "")).strip(),
+                                "category": f"{root_label}: {cat.get('name', '')}",
+                                "is_leaf": str(org.get("di_type", "")) == "9191",
+                            }
+                        )
+        except Exception as e:
+            logger.warning(f"Catalog branch {cat.get('name')} error: {e}")
+        return res_orgs
+
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        for batch in pool.map(fetch_minsk_orgs, sub_tasks):
+            for item in batch:
+                if item["code"] and item["code"] not in seen_codes:
+                    seen_codes.add(item["code"])
+                    catalog.append(item)
+
+    if catalog:
+        try:
+            with open(CATALOG_CACHE_PATH, "w", encoding="utf-8") as f:
+                json.dump(catalog, f, ensure_ascii=False)
+        except Exception as e:
+            logger.warning(f"Failed to write ERIP catalog cache: {e}")
+
+    return catalog
+
+
+def search_minsk_clubs(query: str, limit: int = 25) -> List[Dict[str, Any]]:
+    """Search cached Minsk ERIP clubs catalog by substring tokens."""
+    catalog = sync_minsk_clubs_catalog(force=False)
+    q = (query or "").strip().lower()
+    if not q:
+        return catalog[:limit]
+    tokens = [t for t in re.split(r"\s+", q) if t]
+    hits = []
+    for item in catalog:
+        hay = f"{item.get('name', '')} {item.get('category', '')}".lower()
+        if all(tok in hay for tok in tokens):
+            hits.append(item)
+            if len(hits) >= limit:
+                break
+    return hits
+
+
+def inspect_erip_entry(code: str, di_type: str = "9120") -> Dict[str, Any]:
+    """Inspect a selected ERIP organization or leaf service to discover services and required input field."""
+    session = requests.Session()
+    session.headers.update(ERIP_HEADERS)
+    try:
+        pr = _post_pay_list(session, code, di_type)
+    except Exception as e:
+        return {"ok": False, "error": f"Ошибка ЕРИП: {e}"}
+
+    if isinstance(pr, list):
+        services = [
+            {
+                "code": str(x.get("code", "")),
+                "di_type": str(x.get("di_type", "9120")),
+                "name": str(x.get("name", "")).strip(),
+            }
+            for x in pr
+        ]
+        # Если внутри 1 конкретная услуга — сразу раскрываем её поля
+        if len(services) == 1 and services[0]["di_type"] == "9191":
+            return inspect_erip_entry(services[0]["code"], "9191")
+        return {"ok": True, "type": "list", "services": services}
+
+    if isinstance(pr, dict):
+        attrs = pr.get("attr_records") or []
+        editable = [a for a in attrs if str(a.get("edit", "0")) == "1"]
+        field_name = editable[0].get("name") if editable else "Лицевой счёт / договор"
+        hint = editable[0].get("hint") or pr.get("information") or ""
+        return {
+            "ok": True,
+            "type": "leaf",
+            "service": {
+                "code": str(pr.get("code", code)),
+                "di_type": str(pr.get("di_type", "9191")),
+                "name": str(pr.get("name", "Услуга")),
+                "field_name": field_name,
+                "hint": hint.strip(),
+                "editable_count": len(editable),
+            },
+        }
+
+    return {"ok": False, "error": "Неизвестный ответ ЕРИП"}
+
+
+def get_school_club_balance(district: str, account_number: str) -> Dict[str, Any]:
+    """Query district UO school club ('Кружки для учащихся') using the pupil ERIP number."""
+    code = MINSK_UO_SCHOOL_CLUBS.get(district) or MINSK_UO_SCHOOL_CLUBS["Фрунзенский район"]
+    return query_erip_service(code, account_number)

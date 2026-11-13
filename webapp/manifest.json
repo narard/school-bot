@@ -1,0 +1,16 @@
+{
+  "name": "Школьный пульт",
+  "short_name": "Школьный пульт",
+  "description": "Дневник, питание ЕРИП, кружки и расходы по школе на каждого ребёнка",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f6fb",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

@@ -3,3 +3,4 @@ __pycache__/
 bot.log
 .secret.key
 schools_bot.db
+minsk_erip_clubs.json

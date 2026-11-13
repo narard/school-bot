@@ -15,14 +15,14 @@ from schools_client import SchoolsClient
 from services.weather import format_weather_message
 from services.currency import format_currency_message
 from services.movies import get_random_movie, get_rezka_url
-from services.ai_helper import try_eval_math, ask_homework_tutor
-from services.image_gen import generate_image_pollinations, is_draw_request
 from services.meal_erip import (
     DISTRICT_SHORT_KEYS,
     get_pupil_meal_status,
     format_meal_message,
+    query_erip_service,
 )
-import asyncio
+import calendar
+import webapp_server
 
 logging.basicConfig(
     level=logging.INFO,
@@ -87,18 +87,15 @@ def get_main_keyboard(has_multi_pupils: bool = False) -> types.ReplyKeyboardMark
     b2 = types.KeyboardButton("📆 Завтра")
     b3 = types.KeyboardButton("🗓 Вся неделя")
     b4 = types.KeyboardButton("📊 Четвертные оценки")
-    b5 = types.KeyboardButton("💡 AI-помощник")
-    b6 = types.KeyboardButton("🎨 Нарисовать")
-    b7 = types.KeyboardButton("🍽 Питание")
+    b5 = types.KeyboardButton("🍽 Питание и кружки")
+    b6 = types.KeyboardButton("💸 Расходы")
+    b7 = types.KeyboardButton("📱 Школьный пульт")
     b8 = types.KeyboardButton("🌤 Погода")
-    b9 = types.KeyboardButton("💵 Курсы валют")
-    b10 = types.KeyboardButton("🎬 Кино на вечер")
 
     markup.add(b1, b2)
     markup.add(b3, b4)
     markup.add(b5, b6)
     markup.add(b7, b8)
-    markup.add(b9, b10)
 
     extra = []
     if has_multi_pupils:
@@ -489,177 +486,72 @@ def callback_film(call: types.CallbackQuery):
 
 
 HELP_TEXT = (
-    "🌟 <b>Школьный Дневник СШ №199 — Инструкция и возможности</b>\n\n"
+    "🌟 <b>Школьный Дневник и Пульт — Инструкция</b>\n\n"
     "📚 <b>ШКОЛЬНЫЙ ДНЕВНИК</b>\n"
-    "• <b>📅 Сегодня / 📆 Завтра / 🗓 Вся неделя:</b> расписание с точным временем уроков, полученными оценками и домашними заданиями.\n"
-    "• <b>📊 Четвертные оценки:</b> четвертные и годовые баллы по всем предметам.\n"
-    "• <b>🔔 Автоуведомления:</b> бот сам присылает прогноз погоды утром (06:40), ДЗ на завтра в 16:00 и мгновенно оповещает о новых оценках.\n\n"
-    "🧠 <b>УНИВЕРСАЛЬНЫЙ AI-ПОМОЩНИК (GEMINI)</b>\n"
-    "• <b>В личных сообщениях:</b> пишите любые вопросы прямо в чат обычным текстом — бот ответит на всё! От школьных задач и сочинений до рецептов, ремонта и советов.\n"
-    "• <b>По фото:</b> сфотографируйте страницу учебника или тетради — бот поймёт задание и распишет понятное пошаговое решение.\n"
-    "• <b>В семейном чате:</b> используйте короткую команду <code>/. ваш вопрос</code> (или <code>/ai</code>), либо ответьте (Reply) на любое сообщение бота.\n\n"
-    "⚡️ <b>СВЕРХБЫСТРЫЕ КОМАНДЫ (работают везде):</b>\n"
-    "• <code>/0</code> — Расписание на Сегодня\n"
-    "• <code>/1</code> — Расписание на Завтра\n"
-    "• <code>/7</code> — Расписание на Всю неделю\n"
-    "• <code>/m</code> — Четвертные оценки\n"
-    "• <code>/meal</code> — Баланс питания в столовой и буфете (ЕРИП)\n"
-    "• <code>/meal_add 1234567890 Имя</code> — Быстро привязать счёт питания\n"
-    "• <code>/.</code> &lt;вопрос&gt; — Спросить AI-помощника\n"
-    "• <code>/draw</code> &lt;запрос&gt; — Нарисовать картинку\n\n"
-    "🍽 <b>ПИТАНИЕ (СТОЛОВАЯ + БУФЕТ)</b>\n"
-    "• Нажмите кнопку <b>🍽 Питание</b>, чтобы привязать 10-значный лицевой счёт ученика и видеть актуальный остаток напрямую из ЕРИП + получать уведомления, когда баланс заканчивается.\n\n"
-    "🎨 <b>ГЕНЕРАТОР КАРТИНОК (FLUX)</b>\n"
-    "• Напишите боту: <i>«Нарисуй рыжего котика в космосе»</i> или команду <code>/draw сказочный замок</code> — через несколько секунд получите красивую иллюстрацию!\n\n"
-    "💵 <b>СЕМЕЙНЫЕ СЕРВИСЫ</b>\n"
-    "• 💵 <b>Курсы валют:</b> официальные курсы USD, EUR, RUB, CNY от Нацбанка РБ.\n"
-    "• 🎬 <b>Кино на вечер:</b> подборка фильмов и мультфильмов с прямыми ссылками на просмотр на rezka-ua.tv.\n"
-    "• 👨‍👩‍👧 <b>Семейный чат:</b> отправьте <code>/bind</code> в общую группу, чтобы дневник и уведомления были видны всей семье."
+    "• <b>📅 Сегодня / 📆 Завтра / 🗓 Вся неделя:</b> расписание с временем звонков, оценки и ДЗ.\n"
+    "• <b>📊 Четвертные оценки:</b> четвертные баллы и средний балл.\n"
+    "• <b>🔔 Автоуведомления:</b> погода утром (06:40), ДЗ на завтра в 16:00 и мгновенные оповещения о новых оценках.\n\n"
+    "🍽 <b>ПИТАНИЕ, КРУЖКИ И РАСХОДЫ</b>\n"
+    "• <b>🍽 Питание и кружки</b> (<code>/meal</code>): баланс столовой, буфета и привязанных секций из ЕРИП.\n"
+    "• <b>💸 Расходы</b> (<code>/expenses</code>): статистика трат на ребёнка (неделя / месяц / год).\n"
+    "• <b>📱 Школьный пульт</b> (<code>/app</code>): отдельное мобильное веб-приложение со всеми кружками Минска, графиками расходов и профилями детей.\n\n"
+    "⚡️ <b>БЫСТРЫЕ КОМАНДЫ:</b>\n"
+    "• <code>/0</code> — Сегодня • <code>/1</code> — Завтра • <code>/7</code> — Неделя • <code>/m</code> — Оценки\n"
+    "• <code>/meal</code> — Балансы ЕРИП • <code>/expenses</code> — Расходы • <code>/app</code> — Открыть Пульт\n"
+    "• <code>/bind</code> — Привязать семейный чат"
 )
+
 
 @bot.message_handler(commands=["help"])
 @bot.message_handler(func=lambda m: m.text in ("ℹ️ Справка", "/help", "Справка", "Помощь"))
 def handle_help(message: types.Message):
     bot.send_message(message.chat.id, HELP_TEXT)
 
-@bot.message_handler(func=lambda m: m.text in ("🎨 Нарисовать",))
-def handle_draw_button(message: types.Message):
-    text = (
-        "🎨 <b>Генератор картинок (FLUX)</b>\n\n"
-        "Напишите, что вы хотите нарисовать, например:\n"
-        "• <code>Нарисуй пушистого котёнка в космосе</code>\n"
-        "• <code>Нарисуй сказочный замок на закате</code>\n"
-        "• <code>/draw спорткар будущего в неоновом городе</code>\n\n"
-        "Отправьте текстовое описание прямо в чат! ✨"
+
+@bot.message_handler(commands=["app"])
+@bot.message_handler(func=lambda m: m.text and ("школьный пульт" in m.text.lower() or "📱" in m.text))
+def handle_open_app(message: types.Message):
+    app_url = os.environ.get("WEBAPP_PUBLIC_URL", "http://192.168.1.35:8080")
+    bot.send_message(
+        message.chat.id,
+        f"📱 <b>Школьный пульт (приложение)</b>\n\n"
+        f"Откройте в браузере телефона:\n"
+        f"👉 {app_url}\n\n"
+        f"💡 <i>Чтобы добавить как отдельное приложение: нажмите «Поделиться / Меню браузера» → «На экран Домой».</i>",
     )
-    bot.send_message(message.chat.id, text)
 
-@bot.message_handler(commands=["draw", "art", "pic", "d"])
-def handle_draw_cmd(message: types.Message):
-    clean = re.sub(r"^/(draw|art|pic)\s*", "", message.text).strip()
-    if not clean:
-        bot.send_message(message.chat.id, "Напишите описание после команды: например <code>/draw сказочный замок</code>")
+
+@bot.message_handler(commands=["expenses", "spend"])
+@bot.message_handler(func=lambda m: m.text and ("расходы" in m.text.lower() or "💸" in m.text))
+def handle_expenses(message: types.Message):
+    user = resolve_user_context(message)
+    if not user:
+        bot.send_message(message.chat.id, "Сначала выполните вход: /start")
         return
-    process_draw_query(message, clean)
-
-def process_draw_query(message: types.Message, prompt: str):
-    wait_msg = bot.send_message(message.chat.id, f"🎨 <b>Художник рисует:</b> <i>«{prompt}»</i>...")
-    try:
-        bot.send_chat_action(message.chat.id, "upload_photo")
-        success, img_bytes, clean_prompt = generate_image_pollinations(prompt)
-        if success and img_bytes:
-            bot.send_photo(
-                message.chat.id,
-                photo=img_bytes,
-                caption=f"🎨 <b>Готово!</b>\n<i>Запрос: {clean_prompt}</i>\n💡 <i>Напишите ещё, что нарисовать!</i>"
-            )
-            try:
-                bot.delete_message(message.chat.id, wait_msg.message_id)
-            except Exception:
-                pass
-        else:
-            bot.edit_message_text(f"🎨 {clean_prompt}", message.chat.id, wait_msg.message_id)
-    except Exception as e:
-        logger.error(f"Draw error: {e}")
-        try:
-            bot.edit_message_text(f"❌ Ошибка генерации: {e}", message.chat.id, wait_msg.message_id)
-        except Exception:
-            pass
-
-@bot.message_handler(func=lambda m: m.text in ("💡 AI-помощник",))
-def handle_ai_prompt(message: types.Message):
-    text = (
-        "💡 <b>Универсальный AI-помощник для всей семьи</b>\n\n"
-        "Вы можете задавать любые вопросы прямо в чат:\n"
-        "• <b>По урокам:</b> <i>«как пишется слово парашют?», «реши задачу: поезд ехал 3 часа со скоростью 60 км/ч...»</i>\n"
-        "• <b>Быт и кулинария:</b> <i>«что приготовить из куриного филе и кабачка?», «как отмыть нагар со сковороды?»</i>\n"
-        "• <b>Советы и идеи:</b> <i>«поздравление маме на день рождения в стихах», «переведи на английский...»</i>\n"
-        "• <b>По фото:</b> просто отправьте фото страницы учебника или тетради!\n\n"
-        "💡 <i>В личных сообщениях можно писать просто так — бот поймёт любой вопрос без команды /ai!</i>"
-    )
-    bot.send_message(message.chat.id, text)
-
-@bot.message_handler(commands=["ai", "a"])
-@bot.message_handler(func=lambda m: m.text and (m.text.startswith("/.") or m.text.startswith(".")))
-def handle_ai_cmd(message: types.Message):
-    text = message.text.strip()
-    query = re.sub(r"^(/ai|/a|/\.|\.)(@[a-zA-Z0-9_]+)?\s*", "", text, flags=re.IGNORECASE).strip()
-    if not query:
-        bot.send_message(message.chat.id, "Напишите вопрос после команды:\nНапример: <code>/0</code> — сегодня\nИли <code>/. как пишется слово парашют?</code> (или <code>/ai вопрос</code>)")
-        return
-    process_ai_query(message, query)
-
-def send_ai_reply(chat_id: int, answer: str, status_msg_id: Optional[int] = None):
-    header = "💡 <b>Ответ AI:</b>\n\n"
-    full_text = f"{header}{answer}"
-    
-    if status_msg_id and len(full_text) <= 4000:
-        try:
-            bot.edit_message_text(full_text, chat_id, status_msg_id, parse_mode="HTML")
-            return
-        except Exception:
-            try:
-                bot.edit_message_text(f"💡 Ответ AI:\n\n{answer}", chat_id, status_msg_id)
-                return
-            except Exception:
-                pass
-
-    if status_msg_id:
-        try:
-            bot.delete_message(chat_id, status_msg_id)
-        except Exception:
-            pass
-
-    chunks = []
-    curr = ""
-    for part in answer.split("\n\n"):
-        if len(curr) + len(part) + 2 > 3500:
-            if curr:
-                chunks.append(curr.strip())
-            curr = part + "\n\n"
-        else:
-            curr += part + "\n\n"
-    if curr.strip():
-        chunks.append(curr.strip())
-
-    for idx, c in enumerate(chunks):
-        prefix = header if idx == 0 else ""
-        try:
-            bot.send_message(chat_id, f"{prefix}{c}", parse_mode="HTML")
-        except Exception:
-            bot.send_message(chat_id, f"{prefix}{c}")
-
-@bot.message_handler(commands=["new", "clear", "reset"])
-def handle_clear_ai_context(message: types.Message):
-    from services.ai_helper import clear_chat_history
-    clear_chat_history(message.chat.id)
-    bot.send_message(message.chat.id, "🔄 <b>Память диалога очищена!</b>\nМожем начинать новую тему или задачу с чистого листа.")
-
-@bot.message_handler(content_types=["photo"])
-def handle_photo(message: types.Message):
-    caption = message.caption or "Помоги решить задание на фото. Объясни наглядно и кратко."
-    status = bot.send_message(message.chat.id, "🤖 Анализирую задание с фото...")
-    try:
-        file_info = bot.get_file(message.photo[-1].file_id)
-        downloaded = bot.download_file(file_info.file_path)
-        ans = asyncio.run(ask_homework_tutor(caption, image_bytes=downloaded, chat_id=message.chat.id))
-        send_ai_reply(message.chat.id, ans, status.message_id)
-    except Exception as e:
-        bot.edit_message_text(f"❌ Не удалось обработать фото: {e}", message.chat.id, status.message_id)
-
-def process_ai_query(message: types.Message, query: str):
-    # Прямой калькулятор
-    direct_math = try_eval_math(query)
-    if direct_math:
-        bot.send_message(message.chat.id, f"💡 <b>Ответ:</b>\n\n{direct_math}")
-        return
-
-    status = bot.send_message(message.chat.id, "🤖 AI думает над ответом...")
-    try:
-        ans = asyncio.run(ask_homework_tutor(query, chat_id=message.chat.id))
-        send_ai_reply(message.chat.id, ans, status.message_id)
-    except Exception as e:
-        bot.edit_message_text(f"❌ Ошибка AI: {e}", message.chat.id, status.message_id)
+    children = db.ensure_children_synced(user["tg_id"])
+    cat_labels = {
+        "canteen": "🥗 Столовая",
+        "buffet": "🥐 Буфет",
+        "club": "🤖 Кружки",
+        "textbooks": "📚 Учебники",
+        "other": "📌 Прочее",
+    }
+    lines = ["💸 <b>Школьные расходы (текущий месяц)</b>\n"]
+    total_all = 0.0
+    for ch in children:
+        s = db.get_expenses_summary(user["tg_id"], child_id=ch["id"], period="month")
+        total_all += s["total"]
+        lines.append(f"👤 <b>{ch['name']}: {s['total']:.2f} BYN</b>".replace(".", ","))
+        for k, lbl in cat_labels.items():
+            v = s["by_category"].get(k, 0.0)
+            if v > 0:
+                lines.append(f"  • {lbl}: {v:.2f} BYN".replace(".", ","))
+    if not children:
+        lines.append("Профили детей пока пустые. Откройте 📱 Школьный пульт!")
+    else:
+        lines.append(f"\n💰 <b>Итого по семье: {total_all:.2f} BYN</b>".replace(".", ","))
+    lines.append("\n<i>Подробные графики (неделя / месяц / четверть / год) — в 📱 Школьном пульте.</i>")
+    bot.send_message(message.chat.id, "\n".join(lines))
 
 @bot.message_handler(commands=["settings", "setup"])
 @bot.message_handler(func=lambda m: m.text and ("настройки" in m.text.lower() or "⚙️" in m.text or m.text.startswith("/settings")))
@@ -794,18 +686,53 @@ def _save_and_show_meal_account(
 
 
 @bot.message_handler(commands=["meal", "food", "eat"])
-@bot.message_handler(func=lambda m: m.text and (m.text in ("🍽 Питание", "Питание", "Буфет") or m.text.startswith("🍽")))
+@bot.message_handler(func=lambda m: m.text and (m.text in ("🍽 Питание", "🍽 Питание и кружки", "Питание", "Буфет") or m.text.startswith("🍽")))
 def handle_meal_balance(message: types.Message):
     user = resolve_user_context(message)
     if not user:
         bot.send_message(message.chat.id, "Сначала выполните вход: /start")
         return
+
+    clubs = db.get_child_clubs(user["tg_id"])
     accounts = db.get_meal_accounts(user["tg_id"])
-    if not accounts:
+    if not clubs and not accounts:
         _send_meal_setup_prompt(message.chat.id)
         return
 
-    wait_msg = bot.send_message(message.chat.id, "⏳ Запрашиваю баланс в ЕРИП (столовая и буфет)...")
+    wait_msg = bot.send_message(message.chat.id, "⏳ Запрашиваю актуальные данные в ЕРИП...")
+    if clubs:
+        children_map = {c["id"]: c["name"] for c in db.ensure_children_synced(user["tg_id"])}
+        lines = ["🍽 <b>Питание и кружки (ЕРИП)</b>\n"]
+        by_child: Dict[int, List[Dict[str, Any]]] = {}
+        for cl in clubs:
+            by_child.setdefault(cl["child_id"], []).append(cl)
+        today_str = date.today().isoformat()
+        month_key = date.today().strftime("%Y-%m")
+        for cid, cl_list in by_child.items():
+            lines.append(f"👤 <b>{children_map.get(cid, 'Ученик')}</b>")
+            for cl in cl_list:
+                res = query_erip_service(cl["erip_code"], cl["account_number"], cl.get("di_type") or "9191")
+                if res.get("ok"):
+                    db.update_club_erip_state(
+                        user["tg_id"], cl["id"], res.get("fio", ""),
+                        res.get("balance"), res.get("to_pay"), today_str,
+                        res.get("saldo_start"), res.get("paid_period"),
+                    )
+                    if res.get("balance") is not None:
+                        bal_txt = f"<b>{res['balance']:.2f} BYN</b>".replace(".", ",")
+                    elif cl.get("last_paid_month") == month_key:
+                        bal_txt = "✅ оплачено в этом мес."
+                    elif cl.get("monthly_amount"):
+                        bal_txt = f"абон. {float(cl['monthly_amount']):.2f} BYN".replace(".", ",")
+                    else:
+                        bal_txt = f"к оплате {float(res.get('to_pay') or 0):.2f} BYN".replace(".", ",")
+                else:
+                    bal_txt = f"<i>{res.get('error', 'ошибка')}</i>"
+                lines.append(f"• {cl['org_name']}: {bal_txt}")
+            lines.append("")
+        bot.edit_message_text("\n".join(lines), message.chat.id, wait_msg.message_id)
+        return
+
     first = True
     for acc_row in accounts:
         text, markup = _render_meal_card(acc_row)
@@ -981,37 +908,35 @@ def callback_meal_delete(call: types.CallbackQuery):
     bot.edit_message_text(f"🗑 Счёт питания <code>{acc}</code> удалён.", call.message.chat.id, call.message.message_id)
     bot.answer_callback_query(call.id, "Удалено")
 
-@bot.message_handler(content_types=["text"])
-def handle_all_other_text(message: types.Message):
-    text = message.text.strip()
-    if not text:
-        return
 
-    # 1. Проверяем, запрос ли это на рисование
-    if is_draw_request(text):
-        process_draw_query(message, text)
+@bot.callback_query_handler(func=lambda c: c.data.startswith("club_paid:"))
+def callback_club_paid(call: types.CallbackQuery):
+    user = resolve_callback_user(call)
+    if not user:
+        bot.answer_callback_query(call.id, "Сначала выполните вход: /start")
         return
-
-    # 2. В личных сообщениях - отвечает универсальный AI
-    if message.chat.type == "private":
-        process_ai_query(message, text)
+    try:
+        club_id = int(call.data.split(":", 1)[1])
+    except ValueError:
+        bot.answer_callback_query(call.id, "Ошибка ID")
         return
-
-    # 3. В семейной группе - отвечаем ТОЛЬКО если обратились к боту
-    if message.chat.type in ("group", "supergroup"):
-        try:
-            bot_me = bot.get_me()
-            bot_user = f"@{bot_me.username}".lower()
-            if bot_user in text.lower():
-                clean_q = re.sub(rf"@{bot_me.username}", "", text, flags=re.IGNORECASE).strip()
-                process_ai_query(message, clean_q or "Привет!")
-                return
-            if message.reply_to_message and message.reply_to_message.from_user and message.reply_to_message.from_user.id == bot_me.id:
-                process_ai_query(message, text)
-                return
-        except Exception:
-            pass
-        # В группе бот молчит, если обращаются не к нему!
+    club = db.confirm_club_payment(user["tg_id"], club_id, amount=None, date_str=date.today().isoformat())
+    if not club:
+        bot.answer_callback_query(call.id, "Кружок не найден")
+        return
+    amt = club.get("monthly_amount") or club.get("last_to_pay") or 0
+    amt_str = f" ({float(amt):.2f} BYN)".replace(".", ",") if amt else ""
+    try:
+        bot.edit_message_text(
+            f"✅ <b>Оплата подтверждена!</b>\n"
+            f"📌 {club['org_name']} ({club['service_name']}){amt_str}\n"
+            f"Записано в статистику расходов за {date.today().strftime('%m.%Y')}.",
+            call.message.chat.id,
+            call.message.message_id,
+        )
+    except Exception:
+        pass
+    bot.answer_callback_query(call.id, "Оплата зафиксирована!")
 
 
 
@@ -1175,6 +1100,67 @@ def notifier_loop():
                                     pass
                             db.mark_meal_alert_sent(u["tg_id"], acc_row["account_number"], today_str)
 
+            # 6. Синхронизация кружков/счетов и напоминания об оплате в 10:00 и 18:10
+            if (now.hour == 10 and now.minute < 25) or (now.hour == 18 and 5 <= now.minute < 30):
+                month_key = now.strftime("%Y-%m")
+                for u in users:
+                    if not u.get("notify_new_grades", 1):
+                        continue
+                    children_map = {c["id"]: c["name"] for c in db.ensure_children_synced(u["tg_id"])}
+                    target_chats = db.get_all_target_chat_ids_for_user(u["tg_id"])
+                    for club in db.get_child_clubs(u["tg_id"]):
+                        # Обновляем снимок баланса из ЕРИП раз в день (чтобы копилась статистика)
+                        if club.get("last_checked") != today_str:
+                            res = query_erip_service(club["erip_code"], club["account_number"], club.get("di_type") or "9191")
+                            if res.get("ok"):
+                                db.update_club_erip_state(
+                                    tg_id=u["tg_id"],
+                                    club_id=club["id"],
+                                    fio=res.get("fio", ""),
+                                    balance=res.get("balance"),
+                                    to_pay=res.get("to_pay"),
+                                    snap_date=today_str,
+                                    saldo_start=res.get("saldo_start"),
+                                    paid_period=res.get("paid_period"),
+                                )
+                        # Напоминания для кружков с датой оплаты (1-го числа, за 5 дней, за 1 день)
+                        due_day = club.get("due_day")
+                        if not due_day or club.get("last_paid_month") == month_key:
+                            continue
+                        max_d = calendar.monthrange(now.year, now.month)[1]
+                        due_dt = now.date().replace(day=min(int(due_day), max_d))
+                        days_left = (due_dt - now.date()).days
+                        tag = None
+                        if now.day == 1:
+                            tag = f"{month_key}:start"
+                            when_txt = f"начало месяца (срок до {due_dt.strftime('%d.%m')})"
+                        elif days_left == 5:
+                            tag = f"{month_key}:d5"
+                            when_txt = f"осталось 5 дней (до {due_dt.strftime('%d.%m')})"
+                        elif days_left in (0, 1):
+                            tag = f"{month_key}:d{days_left}"
+                            when_txt = "ПОСЛЕДНИЙ ДЕНЬ сегодня!" if days_left == 0 else "остался 1 день (завтра срок)!"
+                        if tag and club.get("last_reminded_tag") != tag:
+                            amt = club.get("monthly_amount") or club.get("last_to_pay")
+                            amt_txt = f" • Сумма: <b>{float(amt):.2f} BYN</b>".replace(".", ",") if amt else ""
+                            child_name = children_map.get(club["child_id"], "Ученик")
+                            alert = (
+                                f"💳 <b>Напоминание об оплате кружка</b>\n\n"
+                                f"👤 <b>{child_name}</b>\n"
+                                f"🤖 <b>{club['org_name']}</b> ({club['service_name']})\n"
+                                f"📄 Счёт/договор: <code>{club['account_number']}</code>{amt_txt}\n"
+                                f"⏰ Срок: <b>{when_txt}</b>"
+                            )
+                            kb = types.InlineKeyboardMarkup()
+                            btn_lbl = f"✅ Оплатил ({float(amt):.2f} BYN)".replace(".", ",") if amt else "✅ Оплатил в этом месяце"
+                            kb.add(types.InlineKeyboardButton(btn_lbl, callback_data=f"club_paid:{club['id']}"))
+                            for cid in target_chats:
+                                try:
+                                    bot.send_message(cid, alert, reply_markup=kb)
+                                except Exception:
+                                    pass
+                            db.mark_club_reminded(club["id"], tag)
+
         except Exception as e:
             logger.error(f"Error in background notifier loop: {e}")
 
@@ -1187,6 +1173,10 @@ def main():
     # Запуск фонового планировщика
     t = threading.Thread(target=notifier_loop, daemon=True)
     t.start()
+
+    # Запуск PWA веб-приложения «Школьный пульт»
+    w = threading.Thread(target=webapp_server.run_webapp_in_thread, kwargs={"host": "0.0.0.0", "port": webapp_server.DEFAULT_PORT}, daemon=True)
+    w.start()
     
     logger.info("Bot starting polling on Xiaomi Mi Box...")
     while True:

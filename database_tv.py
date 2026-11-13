@@ -102,6 +102,69 @@ def init_db():
             PRIMARY KEY (tg_id, account_number)
         );
         """)
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS children_profiles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tg_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            pupil_id TEXT,
+            subdomain TEXT,
+            district TEXT DEFAULT 'Фрунзенский район',
+            erip_account TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """)
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS child_clubs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tg_id INTEGER NOT NULL,
+            child_id INTEGER NOT NULL,
+            org_name TEXT NOT NULL,
+            service_name TEXT DEFAULT '',
+            erip_code TEXT NOT NULL,
+            di_type TEXT DEFAULT '9191',
+            account_number TEXT NOT NULL,
+            kind TEXT DEFAULT 'club',
+            monthly_amount REAL,
+            due_day INTEGER,
+            last_paid_month TEXT,
+            last_reminded_tag TEXT,
+            alert_threshold REAL DEFAULT 5.0,
+            last_erip_fio TEXT,
+            last_balance REAL,
+            last_to_pay REAL,
+            last_checked TEXT
+        );
+        """)
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS balance_snapshots (
+            tg_id INTEGER NOT NULL,
+            club_id INTEGER NOT NULL,
+            snap_date TEXT NOT NULL,
+            balance REAL,
+            saldo_start REAL,
+            paid_period REAL,
+            PRIMARY KEY (tg_id, club_id, snap_date)
+        );
+        """)
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS expenses_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tg_id INTEGER NOT NULL,
+            child_id INTEGER NOT NULL,
+            category TEXT NOT NULL,
+            title TEXT NOT NULL,
+            amount REAL NOT NULL,
+            expense_date TEXT NOT NULL,
+            source TEXT DEFAULT 'manual',
+            unique_key TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """)
+        conn.execute("DROP INDEX IF EXISTS idx_expenses_unique;")
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_expenses_unique ON expenses_log(tg_id, unique_key);"
+        )
         conn.commit()
 
 def save_user(tg_id: int, login: str, password: str, active_pupil: Dict[str, Any], pupils: List[Dict[str, Any]]):
@@ -310,4 +373,374 @@ def mark_meal_alert_sent(tg_id: int, account_number: str, date_str: str):
             (date_str, tg_id, account_number.strip()),
         )
         conn.commit()
+
+
+# ================= SCHOOL HUB: CHILDREN, CLUBS, EXPENSES =================
+
+def ensure_children_synced(tg_id: int) -> List[Dict[str, Any]]:
+    """Sync schools.by pupils into children_profiles if missing, and return all children."""
+    with get_db() as conn:
+        pupils = conn.execute("SELECT * FROM user_pupils WHERE tg_id = ?", (tg_id,)).fetchall()
+        existing = conn.execute("SELECT * FROM children_profiles WHERE tg_id = ? ORDER BY id ASC", (tg_id,)).fetchall()
+        existing_pids = {str(r["pupil_id"]) for r in existing if r["pupil_id"]}
+        for p in pupils:
+            pid = str(p["pupil_id"])
+            if pid not in existing_pids:
+                conn.execute(
+                    """
+                    INSERT INTO children_profiles (tg_id, name, pupil_id, subdomain, district)
+                    VALUES (?, ?, ?, ?, 'Фрунзенский район')
+                    """,
+                    (tg_id, p["name"], pid, p["subdomain"]),
+                )
+        conn.commit()
+        rows = conn.execute("SELECT * FROM children_profiles WHERE tg_id = ? ORDER BY id ASC", (tg_id,)).fetchall()
+        return [dict(r) for r in rows]
+
+
+def add_child_profile(
+    tg_id: int,
+    name: str,
+    district: str = "Фрунзенский район",
+    erip_account: str = "",
+    pupil_id: Optional[str] = None,
+    subdomain: Optional[str] = None,
+) -> int:
+    with get_db() as conn:
+        cur = conn.execute(
+            """
+            INSERT INTO children_profiles (tg_id, name, pupil_id, subdomain, district, erip_account)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (tg_id, name.strip(), pupil_id, subdomain, district, erip_account.strip() or None),
+        )
+        child_id = cur.lastrowid
+        conn.commit()
+    if erip_account.strip():
+        attach_school_erip_pack(tg_id, child_id, erip_account.strip(), district)
+    return child_id
+
+
+def update_child_profile(tg_id: int, child_id: int, name: str, district: str, erip_account: str = ""):
+    acc = erip_account.strip()
+    with get_db() as conn:
+        conn.execute(
+            """
+            UPDATE children_profiles
+            SET name = ?, district = ?, erip_account = ?
+            WHERE id = ? AND tg_id = ?
+            """,
+            (name.strip(), district, acc or None, child_id, tg_id),
+        )
+        conn.commit()
+    if acc:
+        attach_school_erip_pack(tg_id, child_id, acc, district)
+
+
+def delete_child_profile(tg_id: int, child_id: int):
+    with get_db() as conn:
+        conn.execute("DELETE FROM child_clubs WHERE tg_id = ? AND child_id = ?", (tg_id, child_id))
+        conn.execute("DELETE FROM expenses_log WHERE tg_id = ? AND child_id = ?", (tg_id, child_id))
+        conn.execute("DELETE FROM children_profiles WHERE id = ? AND tg_id = ?", (child_id, tg_id))
+        conn.commit()
+
+
+def attach_school_erip_pack(tg_id: int, child_id: int, account_number: str, district: str):
+    """Ensure Canteen, Buffet, and School UO Clubs entries exist for a child's 10-digit ERIP number."""
+    from services.meal_erip import MINSK_KSHP_DISTRICTS, MINSK_UO_SCHOOL_CLUBS
+
+    kshp = MINSK_KSHP_DISTRICTS.get(district) or MINSK_KSHP_DISTRICTS["Фрунзенский район"]
+    uo_club = MINSK_UO_SCHOOL_CLUBS.get(district) or MINSK_UO_SCHOOL_CLUBS["Фрунзенский район"]
+    pack = [
+        ("canteen", "КШП Столовая", "Питание", kshp["canteen"]),
+        ("buffet", "КШП Буфет", "Питание в буфете", kshp["buffet"]),
+        ("school_club", f"Школьные кружки ({district.replace(' район', '')})", "Кружки для учащихся", uo_club),
+    ]
+    with get_db() as conn:
+        for kind, org_name, svc_name, erip_code in pack:
+            row = conn.execute(
+                "SELECT id FROM child_clubs WHERE tg_id = ? AND child_id = ? AND kind = ?",
+                (tg_id, child_id, kind),
+            ).fetchone()
+            if row:
+                conn.execute(
+                    """
+                    UPDATE child_clubs
+                    SET account_number = ?, erip_code = ?, org_name = ?, service_name = ?
+                    WHERE id = ?
+                    """,
+                    (account_number, erip_code, org_name, svc_name, row["id"]),
+                )
+            else:
+                conn.execute(
+                    """
+                    INSERT INTO child_clubs (tg_id, child_id, org_name, service_name, erip_code, di_type, account_number, kind, alert_threshold)
+                    VALUES (?, ?, ?, ?, ?, '9191', ?, ?, 5.0)
+                    """,
+                    (tg_id, child_id, org_name, svc_name, erip_code, account_number, kind),
+                )
+        conn.commit()
+
+
+def add_child_club(
+    tg_id: int,
+    child_id: int,
+    org_name: str,
+    service_name: str,
+    erip_code: str,
+    di_type: str,
+    account_number: str,
+    kind: str = "club",
+    monthly_amount: Optional[float] = None,
+    due_day: Optional[int] = None,
+    alert_threshold: float = 5.0,
+    last_erip_fio: str = "",
+    last_balance: Optional[float] = None,
+    last_to_pay: Optional[float] = None,
+) -> int:
+    with get_db() as conn:
+        cur = conn.execute(
+            """
+            INSERT INTO child_clubs (
+                tg_id, child_id, org_name, service_name, erip_code, di_type,
+                account_number, kind, monthly_amount, due_day, alert_threshold,
+                last_erip_fio, last_balance, last_to_pay, last_checked
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, date('now', 'localtime'))
+            """,
+            (
+                tg_id,
+                child_id,
+                org_name.strip(),
+                service_name.strip(),
+                str(erip_code),
+                str(di_type),
+                account_number.strip(),
+                kind,
+                float(monthly_amount) if monthly_amount not in (None, "") else None,
+                int(due_day) if due_day not in (None, "") else None,
+                float(alert_threshold),
+                last_erip_fio,
+                last_balance,
+                last_to_pay,
+            ),
+        )
+        conn.commit()
+        return cur.lastrowid
+
+
+def get_child_clubs(tg_id: int, child_id: Optional[int] = None) -> List[Dict[str, Any]]:
+    with get_db() as conn:
+        if child_id is not None:
+            rows = conn.execute(
+                "SELECT * FROM child_clubs WHERE tg_id = ? AND child_id = ? ORDER BY kind IN ('canteen','buffet','school_club') DESC, id ASC",
+                (tg_id, child_id),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM child_clubs WHERE tg_id = ? ORDER BY child_id ASC, kind IN ('canteen','buffet','school_club') DESC, id ASC",
+                (tg_id,),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_club_by_id(tg_id: int, club_id: int) -> Optional[Dict[str, Any]]:
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM child_clubs WHERE tg_id = ? AND id = ?",
+            (tg_id, club_id),
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def delete_child_club(tg_id: int, club_id: int):
+    with get_db() as conn:
+        conn.execute("DELETE FROM balance_snapshots WHERE tg_id = ? AND club_id = ?", (tg_id, club_id))
+        conn.execute("DELETE FROM child_clubs WHERE tg_id = ? AND id = ?", (tg_id, club_id))
+        conn.commit()
+
+
+def update_club_erip_state(
+    tg_id: int,
+    club_id: int,
+    fio: str,
+    balance: Optional[float],
+    to_pay: Optional[float],
+    snap_date: str,
+    saldo_start: Optional[float] = None,
+    paid_period: Optional[float] = None,
+):
+    """Update cached ERIP state and record snapshot + automatic expense deltas."""
+    with get_db() as conn:
+        club = conn.execute("SELECT * FROM child_clubs WHERE tg_id = ? AND id = ?", (tg_id, club_id)).fetchone()
+        if not club:
+            return
+        prev_snap = conn.execute(
+            "SELECT * FROM balance_snapshots WHERE tg_id = ? AND club_id = ? AND snap_date < ? ORDER BY snap_date DESC LIMIT 1",
+            (tg_id, club_id, snap_date),
+        ).fetchone()
+
+        conn.execute(
+            """
+            UPDATE child_clubs
+            SET last_erip_fio = CASE WHEN ? != '' THEN ? ELSE last_erip_fio END,
+                last_balance = ?,
+                last_to_pay = ?,
+                last_checked = ?
+            WHERE id = ?
+            """,
+            (fio, fio, balance, to_pay, snap_date, club_id),
+        )
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO balance_snapshots (tg_id, club_id, snap_date, balance, saldo_start, paid_period)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (tg_id, club_id, snap_date, balance, saldo_start, paid_period),
+        )
+
+        # Автоматический учёт расходов:
+        # 1) Для столовой за текущий месяц есть точная формула: spent = saldo_start + paid_period - balance
+        if club["kind"] == "canteen" and saldo_start is not None and paid_period is not None and balance is not None:
+            month_key = snap_date[:7]
+            spent_month = round((saldo_start + paid_period) - balance, 2)
+            if spent_month > 0:
+                ukey = f"canteen_month:{club['child_id']}:{month_key}"
+                conn.execute(
+                    """
+                    INSERT INTO expenses_log (tg_id, child_id, category, title, amount, expense_date, source, unique_key)
+                    VALUES (?, ?, 'canteen', 'Школьная столовая', ?, ?, 'erip_canteen_month', ?)
+                    ON CONFLICT(tg_id, unique_key) DO UPDATE SET
+                        amount = excluded.amount,
+                        expense_date = excluded.expense_date;
+                    """,
+                    (tg_id, club["child_id"], spent_month, snap_date, ukey),
+                )
+        # 2) Для буфета и школьных кружков отслеживаем суточное списание баланса
+        elif prev_snap and prev_snap["balance"] is not None and balance is not None:
+            delta = round(prev_snap["balance"] - balance, 2)
+            if delta > 0.01:
+                cat = "buffet" if club["kind"] == "buffet" else "club"
+                ukey = f"snap_delta:{club_id}:{snap_date}"
+                conn.execute(
+                    """
+                    INSERT INTO expenses_log (tg_id, child_id, category, title, amount, expense_date, source, unique_key)
+                    VALUES (?, ?, ?, ?, ?, ?, 'erip_auto', ?)
+                    ON CONFLICT(tg_id, unique_key) DO UPDATE SET amount = excluded.amount;
+                    """,
+                    (tg_id, club["child_id"], cat, club["org_name"], delta, snap_date, ukey),
+                )
+        conn.commit()
+
+
+def confirm_club_payment(tg_id: int, club_id: int, amount: Optional[float], date_str: str) -> Optional[Dict[str, Any]]:
+    with get_db() as conn:
+        club = conn.execute("SELECT * FROM child_clubs WHERE tg_id = ? AND id = ?", (tg_id, club_id)).fetchone()
+        if not club:
+            return None
+        paid_amt = float(amount) if amount is not None else float(club["monthly_amount"] or club["last_to_pay"] or 0.0)
+        month_key = date_str[:7]
+        conn.execute(
+            "UPDATE child_clubs SET last_paid_month = ? WHERE id = ?",
+            (month_key, club_id),
+        )
+        if paid_amt > 0:
+            cat = "canteen" if club["kind"] == "canteen" else ("buffet" if club["kind"] == "buffet" else "club")
+            ukey = f"club_paid:{club_id}:{month_key}"
+            conn.execute(
+                """
+                INSERT INTO expenses_log (tg_id, child_id, category, title, amount, expense_date, source, unique_key)
+                VALUES (?, ?, ?, ?, ?, ?, 'club_confirm', ?)
+                ON CONFLICT(tg_id, unique_key) DO UPDATE SET amount = excluded.amount, expense_date = excluded.expense_date;
+                """,
+                (tg_id, club["child_id"], cat, f"{club['org_name']} ({club['service_name'] or 'кружок'})", round(paid_amt, 2), date_str, ukey),
+            )
+        conn.commit()
+        return dict(club)
+
+
+def mark_club_reminded(club_id: int, tag: str):
+    with get_db() as conn:
+        conn.execute("UPDATE child_clubs SET last_reminded_tag = ? WHERE id = ?", (tag, club_id))
+        conn.commit()
+
+
+def add_manual_expense(tg_id: int, child_id: int, category: str, title: str, amount: float, expense_date: str):
+    with get_db() as conn:
+        conn.execute(
+            """
+            INSERT INTO expenses_log (tg_id, child_id, category, title, amount, expense_date, source)
+            VALUES (?, ?, ?, ?, ?, ?, 'manual')
+            """,
+            (tg_id, child_id, category, title.strip(), round(float(amount), 2), expense_date),
+        )
+        conn.commit()
+
+
+def delete_expense(tg_id: int, expense_id: int):
+    with get_db() as conn:
+        conn.execute("DELETE FROM expenses_log WHERE tg_id = ? AND id = ?", (tg_id, expense_id))
+        conn.commit()
+
+
+def get_expenses_summary(
+    tg_id: int,
+    child_id: Optional[int] = None,
+    period: str = "month",
+    today_str: Optional[str] = None,
+) -> Dict[str, Any]:
+    from datetime import date, timedelta
+
+    today = date.fromisoformat(today_str) if today_str else date.today()
+    if period == "week":
+        start = (today - timedelta(days=today.weekday())).isoformat()
+    elif period == "month":
+        start = today.replace(day=1).isoformat()
+    elif period == "quarter":
+        # Текущая четверть / ~90 дней с начала четверти (упрощенно 1 число 2 месяца назад)
+        m_start = ((today.month - 1) // 3) * 3 + 1
+        start = today.replace(month=m_start, day=1).isoformat()
+    else:  # academic year: с 1 сентября
+        yr = today.year if today.month >= 9 else today.year - 1
+        start = f"{yr}-09-01"
+
+    params: List[Any] = [tg_id, start, today.isoformat()]
+    child_clause = ""
+    if child_id is not None:
+        child_clause = " AND child_id = ?"
+        params.append(child_id)
+
+    # В отчёте за 7 дней не примешиваем агрегат за весь месяц столовой
+    source_clause = " AND source != 'erip_canteen_month'" if period == "week" else ""
+
+    with get_db() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT * FROM expenses_log
+            WHERE tg_id = ? AND expense_date >= ? AND expense_date <= ? {child_clause} {source_clause}
+            ORDER BY expense_date DESC, id DESC
+            """,
+            params,
+        ).fetchall()
+
+    by_cat: Dict[str, float] = {"canteen": 0.0, "buffet": 0.0, "club": 0.0, "textbooks": 0.0, "other": 0.0}
+    items = []
+    total = 0.0
+    for r in rows:
+        d = dict(r)
+        amt = float(d["amount"] or 0.0)
+        cat = d["category"] if d["category"] in by_cat else "other"
+        by_cat[cat] = round(by_cat[cat] + amt, 2)
+        total = round(total + amt, 2)
+        items.append(d)
+
+    return {
+        "period": period,
+        "start_date": start,
+        "end_date": today.isoformat(),
+        "total": total,
+        "by_category": by_cat,
+        "items": items[:50],
+    }
+
 
