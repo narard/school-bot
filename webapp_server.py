@@ -129,6 +129,10 @@ async def handle_icon(request: web.Request) -> web.FileResponse:
     return web.FileResponse(os.path.join(WEBAPP_DIR, "icon.svg"), headers={"Content-Type": "image/svg+xml"})
 
 
+async def handle_themes(request: web.Request) -> web.FileResponse:
+    return web.FileResponse(os.path.join(WEBAPP_DIR, "themes.html"))
+
+
 async def api_bootstrap(request: web.Request) -> web.Response:
     tg_id = _resolve_tg_id(request)
     children = db.ensure_children_synced(tg_id)
@@ -388,6 +392,7 @@ def create_app() -> web.Application:
     db.init_db()
     app = web.Application()
     app.router.add_get("/", handle_index)
+    app.router.add_get("/themes", handle_themes)
     app.router.add_get("/manifest.json", handle_manifest)
     app.router.add_get("/icon.svg", handle_icon)
     app.router.add_get("/api/bootstrap", api_bootstrap)

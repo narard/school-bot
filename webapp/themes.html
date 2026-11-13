@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Школьный пульт — Выбор дизайна</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #f1f5f9;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --accent: #0f172a;
+      --accent-blue: #2563eb;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 24px 20px 40px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .page {
+      max-width: 1320px;
+      margin: 0 auto;
+    }
+
+    .header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .header h1 {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .header p {
+      font-size: 14px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 9px 14px;
+      border-radius: 10px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--text);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 600;
+      transition: background 0.15s;
+    }
+
+    .back-link:hover {
+      background: #f8fafc;
+    }
+
+    /* Mobile switcher tabs */
+    .mobile-tabs {
+      display: none;
+      gap: 8px;
+      margin-bottom: 16px;
+      background: #e2e8f0;
+      padding: 4px;
+      border-radius: 12px;
+    }
+
+    .mobile-tab {
+      flex: 1;
+      border: none;
+      background: transparent;
+      padding: 9px 10px;
+      border-radius: 9px;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+    }
+
+    .mobile-tab.active {
+      background: #ffffff;
+      color: var(--text);
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 24px;
+      align-items: start;
+    }
+
+    .variant-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      box-shadow: 0 4px 20px rgba(15, 23, 42, 0.04);
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+
+    .variant-card.current {
+      border-color: var(--accent-blue);
+      box-shadow: 0 6px 24px rgba(37, 99, 235, 0.12);
+    }
+
+    .variant-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .variant-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: #f1f5f9;
+      color: #475569;
+      margin-bottom: 6px;
+    }
+
+    .variant-card.current .variant-badge {
+      background: #dbeafe;
+      color: #1d4ed8;
+    }
+
+    .variant-title {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+
+    .variant-desc {
+      font-size: 13px;
+      line-height: 1.45;
+      color: var(--muted);
+      min-height: 38px;
+    }
+
+    .phone-frame {
+      width: 100%;
+      max-width: 375px;
+      margin: 0 auto;
+      background: #0f172a;
+      border-radius: 34px;
+      padding: 10px;
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.14);
+    }
+
+    .phone-screen {
+      width: 100%;
+      height: 670px;
+      border-radius: 25px;
+      overflow: hidden;
+      background: #ffffff;
+    }
+
+    .phone-screen iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      display: block;
+    }
+
+    .variant-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 2px;
+    }
+
+    .btn-select {
+      flex: 1;
+      height: 42px;
+      border: none;
+      border-radius: 11px;
+      background: var(--accent);
+      color: #ffffff;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: opacity 0.15s;
+    }
+
+    .btn-select:hover {
+      opacity: 0.9;
+    }
+
+    .variant-card.current .btn-select {
+      background: var(--accent-blue);
+    }
+
+    .btn-open {
+      height: 42px;
+      padding: 0 13px;
+      border-radius: 11px;
+      border: 1px solid var(--border);
+      background: #ffffff;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .btn-open:hover {
+      background: #f8fafc;
+    }
+
+    @media (max-width: 1100px) {
+      .grid {
+        grid-template-columns: 1fr;
+        max-width: 440px;
+        margin: 0 auto;
+      }
+
+      .mobile-tabs {
+        display: flex;
+        max-width: 440px;
+        margin: 0 auto 16px;
+      }
+
+      .variant-card {
+        display: none;
+      }
+
+      .variant-card.mobile-active {
+        display: flex;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <div>
+        <h1>Школьный пульт — выберите стиль интерфейса</h1>
+        <p>Все 3 экрана интерактивные: можно переключать детей, вкладки и нажимать «Оплатить» прямо внутри превью.</p>
+      </div>
+      <div class="header-actions">
+        <a class="back-link" href="/">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+          Открыть приложение
+        </a>
+      </div>
+    </div>
+
+    <div class="mobile-tabs" role="tablist">
+      <button class="mobile-tab active" data-target="fintech" onclick="switchMobileTab('fintech')">1. Финтех</button>
+      <button class="mobile-tab" data-target="dark" onclick="switchMobileTab('dark')">2. Тёмный OLED</button>
+      <button class="mobile-tab" data-target="minimal" onclick="switchMobileTab('minimal')">3. Минимализм</button>
+    </div>
+
+    <div class="grid">
+      <!-- Вариант 1: Строгий финтех -->
+      <section class="variant-card mobile-active" data-theme-card="fintech">
+        <div>
+          <span class="variant-badge" id="badge-fintech">Вариант 1 · Светлый</span>
+          <h2 class="variant-title">Строгий финтех</h2>
+          <p class="variant-desc">Как банковское приложение: белый фон, чёткие цифры и границы, без лишних украшений.</p>
+        </div>
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <iframe src="/?theme=fintech" title="Превью: Строгий финтех" loading="eager"></iframe>
+          </div>
+        </div>
+        <div class="variant-actions">
+          <button class="btn-select" onclick="chooseTheme('fintech')">Выбрать этот стиль</button>
+          <a class="btn-open" href="/?theme=fintech" target="_blank" title="Открыть в новой вкладке">На весь экран</a>
+        </div>
+      </section>
+
+      <!-- Вариант 2: Тёмный пульт OLED -->
+      <section class="variant-card" data-theme-card="dark">
+        <div>
+          <span class="variant-badge" id="badge-dark">Вариант 2 · Тёмный</span>
+          <h2 class="variant-title">Тёмный пульт OLED</h2>
+          <p class="variant-desc">Графитовый интерфейс для экрана телефона: высокий контраст, комфортно вечером и без бликов.</p>
+        </div>
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <iframe src="/?theme=dark" title="Превью: Тёмный пульт OLED" loading="eager"></iframe>
+          </div>
+        </div>
+        <div class="variant-actions">
+          <button class="btn-select" onclick="chooseTheme('dark')">Выбрать этот стиль</button>
+          <a class="btn-open" href="/?theme=dark" target="_blank" title="Открыть в новой вкладке">На весь экран</a>
+        </div>
+      </section>
+
+      <!-- Вариант 3: Минимализм iOS / Notion -->
+      <section class="variant-card" data-theme-card="minimal">
+        <div>
+          <span class="variant-badge" id="badge-minimal">Вариант 3 · Компактный</span>
+          <h2 class="variant-title">Минимализм iOS</h2>
+          <p class="variant-desc">Максимум информации на одном экране: плотные списки, минимум отступов и спокойные тона.</p>
+        </div>
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <iframe src="/?theme=minimal" title="Превью: Минимализм iOS" loading="eager"></iframe>
+          </div>
+        </div>
+        <div class="variant-actions">
+          <button class="btn-select" onclick="chooseTheme('minimal')">Выбрать этот стиль</button>
+          <a class="btn-open" href="/?theme=minimal" target="_blank" title="Открыть в новой вкладке">На весь экран</a>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    function markCurrentTheme() {
+      const saved = localStorage.getItem('hub_theme') || 'fintech';
+      document.querySelectorAll('.variant-card').forEach(card => {
+        const theme = card.dataset.themeCard;
+        const badge = document.getElementById('badge-' + theme);
+        const isCurrent = theme === saved;
+        card.classList.toggle('current', isCurrent);
+        if (badge) {
+          const labels = {
+            fintech: 'Вариант 1 · Светлый',
+            dark: 'Вариант 2 · Тёмный',
+            minimal: 'Вариант 3 · Компактный'
+          };
+          badge.textContent = isCurrent ? labels[theme] + ' · Выбран' : labels[theme];
+        }
+      });
+    }
+
+    function chooseTheme(theme) {
+      localStorage.setItem('hub_theme', theme);
+      window.location.href = '/?theme=' + encodeURIComponent(theme);
+    }
+
+    function switchMobileTab(theme) {
+      document.querySelectorAll('.mobile-tab').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.target === theme);
+      });
+      document.querySelectorAll('.variant-card').forEach(card => {
+        card.classList.toggle('mobile-active', card.dataset.themeCard === theme);
+      });
+    }
+
+    markCurrentTheme();
+  </script>
+</body>
+</html>
