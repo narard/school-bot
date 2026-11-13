@@ -9,12 +9,20 @@ import hashlib
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 
-from config import (
-    DEFAULT_ADMIN_ID,
-    DEFAULT_MORNING_TIME,
-    DEFAULT_EVENING_TIME,
-    DEFAULT_TG_CHANNELS,
-)
+try:
+    from radar.config import (
+        DEFAULT_ADMIN_ID,
+        DEFAULT_MORNING_TIME,
+        DEFAULT_EVENING_TIME,
+        DEFAULT_TG_CHANNELS,
+    )
+except ImportError:
+    from config import (
+        DEFAULT_ADMIN_ID,
+        DEFAULT_MORNING_TIME,
+        DEFAULT_EVENING_TIME,
+        DEFAULT_TG_CHANNELS,
+    )
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "radar.db")
 
@@ -448,3 +456,7 @@ def get_stats() -> Dict[str, int]:
         "favorites": fav_cnt,
         "channels": ch_cnt,
     }
+
+
+# Авто-инициализация таблиц при загрузке модуля
+init_db()

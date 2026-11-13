@@ -14,8 +14,12 @@ from typing import List, Dict, Any
 import requests
 from bs4 import BeautifulSoup
 
-from config import RSS_FEEDS, REDDIT_SOURCES
-import database as db
+try:
+    from radar.config import RSS_FEEDS, REDDIT_SOURCES
+    from radar import database as db
+except ImportError:
+    from config import RSS_FEEDS, REDDIT_SOURCES
+    import database as db
 
 logger = logging.getLogger(__name__)
 

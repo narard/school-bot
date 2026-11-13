@@ -16,10 +16,16 @@ import requests
 import telebot
 from telebot import types
 
-from config import BOT_TOKEN, CATEGORIES, AI_HEALTH_URL
-import database as db
-import collectors
-import ai_engine
+try:
+    from radar.config import BOT_TOKEN, CATEGORIES, AI_HEALTH_URL
+    from radar import database as db
+    from radar import collectors
+    from radar import ai_engine
+except ImportError:
+    from config import BOT_TOKEN, CATEGORIES, AI_HEALTH_URL
+    import database as db
+    import collectors
+    import ai_engine
 
 LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "radar_bot.log")
 logging.basicConfig(

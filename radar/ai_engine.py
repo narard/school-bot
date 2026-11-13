@@ -13,7 +13,10 @@ from typing import List, Dict, Any, Optional
 
 import requests
 
-from config import AI_PROXY_URL, AI_HEALTH_URL
+try:
+    from radar.config import AI_PROXY_URL, AI_HEALTH_URL
+except ImportError:
+    from config import AI_PROXY_URL, AI_HEALTH_URL
 
 logger = logging.getLogger(__name__)
 
