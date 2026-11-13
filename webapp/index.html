@@ -595,6 +595,98 @@
     .tx-row:last-child { border-bottom: none; padding-bottom: 0; }
     .tx-row:first-child { padding-top: 0; }
 
+    /* Нативные цветные карточки-выпадашки детей в «Балансе» */
+    .urgent-card {
+      background: var(--surface);
+      border-radius: var(--radius-lg);
+      padding: 14px 16px;
+      box-shadow: var(--shadow-card);
+      margin-bottom: 14px;
+    }
+    .urgent-ok-banner {
+      background: var(--ok-bg);
+      color: var(--ok-text);
+      border-radius: var(--radius-lg);
+      padding: 14px 16px;
+      font-size: 13.5px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .urgent-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--surface-soft);
+    }
+    .urgent-row:first-child { padding-top: 2px; }
+    .urgent-row:last-child { border-bottom: none; padding-bottom: 2px; }
+
+    .child-group-card {
+      background: var(--surface);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-card);
+      margin-bottom: 12px;
+      overflow: hidden;
+      border-left: 5px solid var(--c-accent, var(--primary));
+    }
+    .child-group-head {
+      width: 100%;
+      border: none;
+      background: transparent;
+      padding: 15px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      cursor: pointer;
+      font-family: inherit;
+      color: var(--text);
+      text-align: left;
+      transition: background 0.14s;
+    }
+    .child-group-head:active { background: var(--surface-soft); }
+    .child-group-left { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1; }
+    .child-group-sub { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+    .child-group-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    .child-bal-chip {
+      padding: 5px 11px;
+      border-radius: 999px;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      background: var(--c-soft, var(--surface-tonal));
+      color: var(--c-text, var(--info-text));
+    }
+    .chev-icon {
+      color: var(--muted);
+      transition: transform 0.2s;
+    }
+    .child-group-card.open .chev-icon { transform: rotate(180deg); }
+    .child-group-body {
+      border-top: 1px solid var(--surface-soft);
+      padding: 6px 16px 12px;
+      background: color-mix(in srgb, var(--c-soft, transparent) 22%, var(--surface));
+    }
+    .acc-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 11px 4px;
+      border-bottom: 1px solid var(--surface-soft);
+      cursor: pointer;
+    }
+    .acc-row:last-child { border-bottom: none; padding-bottom: 4px; }
+    .acc-row:hover { opacity: 0.9; }
+    .acc-name { font-size: 14px; font-weight: 600; color: var(--text); }
+    .acc-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .acc-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; text-align: right; }
+
     /* Дневник */
     .lesson-card {
       display: flex;
@@ -1017,7 +1109,7 @@
 <!-- 3 простые и понятные вкладки: Учёба · Баланс · Аналитика -->
 <nav class="bottom-nav">
   <div class="bottom-nav-inner">
-    <button class="nav-item" data-tab="diary" onclick="switchTab('diary')">
+    <button class="nav-item active" data-tab="diary" onclick="switchTab('diary')">
       <span class="nav-pill">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>
@@ -1025,7 +1117,7 @@
       </span>
       <span>Учёба</span>
     </button>
-    <button class="nav-item active" data-tab="wallet" onclick="switchTab('wallet')">
+    <button class="nav-item" data-tab="wallet" onclick="switchTab('wallet')">
       <span class="nav-pill">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="2" y="5" width="20" height="14" rx="3"/><line x1="2" y1="10" x2="22" y2="10"/>
@@ -1210,6 +1302,9 @@
       <button class="btn btn-primary" id="payConfirmBtn">Готово, я оплатил(а)</button>
     </div>
 
+    <div id="payEditWrap" style="margin-top:10px;">
+      <button class="btn btn-neutral" id="payEditBtn">Настроить счёт / стоимость</button>
+    </div>
     <div id="payDeleteWrap" style="margin-top:10px;display:none;">
       <button class="btn btn-danger-soft" id="payDeleteBtn">Убрать этот кружок из списка</button>
     </div>
@@ -1323,13 +1418,21 @@ function setGoogleTheme(t) {
   applyGoogleTheme(q === "dark" || q === "google-dark" ? "google-dark" : saved);
 })();
 
-const AVATAR_COLORS = ["#1A73E8", "#34A853", "#FBBC04", "#EA4335", "#9334E6"];
+const AVATAR_COLORS = ["#1A73E8", "#1E8E3E", "#E37400", "#D93025", "#8430CE"];
+const CHILD_THEMES = [
+  { accent: "#1A73E8", soft: "#E8F0FE", text: "#174EA6" }, // 0: Синий (Эвита)
+  { accent: "#1E8E3E", soft: "#E6F4EA", text: "#137333" }, // 1: Зелёный (Иван)
+  { accent: "#E37400", soft: "#FEF7E0", text: "#B06000" }, // 2: Янтарный
+  { accent: "#D93025", soft: "#FCE8E6", text: "#C5221F" }, // 3: Коралловый
+  { accent: "#8430CE", soft: "#F3E8FD", text: "#681DA8" }, // 4: Фиолетовый
+];
 
 const state = {
   children: [], clubs: [], districts: [],
-  selectedChildId: null, activeTab: "wallet",
+  selectedChildId: null, activeTab: "diary",
   expPeriod: "month", diaryMode: "day",
   dayOffset: 0, weekOffset: 0, monthOffset: 0, expandedWeekIdx: 0,
+  expandedChildren: {},
   expenses: null, diary: null,
   selectedOrg: null, selectedService: null, inspectServices: [], searchItems: [],
   payClub: null,
@@ -1381,7 +1484,9 @@ async function loadBootstrap() {
   state.expenses = data.month_expenses;
   if (state.selectedChildId && !state.children.some(c => c.id === state.selectedChildId)) state.selectedChildId = null;
   renderTopTabs();
-  renderCurrentTab();
+  if (state.activeTab === "diary") await loadDiary();
+  else if (state.activeTab === "expenses") await loadExpenses();
+  else renderCurrentTab();
 }
 
 function renderTopTabs() {
@@ -1525,43 +1630,50 @@ function statusPill(club) {
   return `<span class="status-pill pill-info">Подключён</span>`;
 }
 
-function renderClubCard(club) {
+function childThemeById(cid) {
+  const idx = Math.max(0, state.children.findIndex(c => c.id === cid));
+  return CHILD_THEMES[idx % CHILD_THEMES.length];
+}
+
+function clubNeedsAction(club) {
+  if (club.kind === "canteen" || club.kind === "buffet") {
+    return club.last_balance !== null && club.last_balance !== undefined && club.last_balance <= (club.alert_threshold || 5);
+  }
+  if (club.kind === "school_club") {
+    return club.last_balance !== null && club.last_balance !== undefined && club.last_balance !== 0;
+  }
+  return Boolean(club.due_day && !club.paid_this_month && ["soon", "urgent", "overdue"].includes(club.due_status));
+}
+
+function toggleChildGroup(cid) {
+  state.expandedChildren[cid] = !state.expandedChildren[cid];
+  renderCurrentTab();
+}
+
+function renderCompactAccRow(club) {
   const isCustom = !["canteen", "buffet", "school_club"].includes(club.kind);
-  const catClass = isCustom ? "cat-club" : "cat-" + club.kind;
   const amt = club.last_balance !== null && club.last_balance !== undefined
     ? fmtByn(club.last_balance)
     : (club.monthly_amount ? fmtByn(club.monthly_amount) : (club.last_to_pay > 0 ? fmtByn(club.last_to_pay) : "—"));
-  const who = state.selectedChildId === null ? `${esc(childNameById(club.child_id))} · ` : "";
-  const orgSub = !isCustom && club.org_name ? `${esc(club.org_name)} · ` : "";
-
-  const doneBtn = (isCustom && !club.paid_this_month)
-    ? `<button class="btn-pill btn-ok-pill" onclick="openPayModal(${club.id}, true)">✓ Я оплатил</button>`
-    : "";
-  const editBtn = `<button class="btn-more" title="Настроить" onclick="openEditClubModal(${club.id})">
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>
-    </svg>
-  </button>`;
 
   return `
-    <div class="item-card">
-      <div class="item-main">
-        <div class="cat-circle ${catClass}">${clubIconSvg(club.kind)}</div>
-        <div class="item-info">
-          <div class="item-title-row">
-            <div class="card-title">${esc(clubFriendlyTitle(club))}</div>
-            <div class="item-amt">${amt}</div>
-          </div>
-          <div class="item-sub">${who}${orgSub}Счёт <span class="acc-pill">${esc(club.account_number)}</span></div>
-        </div>
+    <div class="acc-row" onclick="openPayModal(${club.id}, false)">
+      <div style="min-width:0;">
+        <div class="acc-name">${esc(clubFriendlyTitle(club))}</div>
+        <div class="acc-meta">Счёт ${esc(club.account_number)}${isCustom && club.due_day ? ` · до ${club.due_day}-го` : ""}</div>
       </div>
-      <div class="item-footer">
-        <div>${statusPill(club)}</div>
-        <div class="card-btns">
-          <button class="btn-pill btn-tonal" onclick="openPayModal(${club.id}, false)">Как оплатить</button>
-          ${doneBtn}
-          ${editBtn}
+      <div class="acc-right">
+        <div>
+          <div style="font-weight:700;font-size:14.5px;">${amt}</div>
+          <div style="margin-top:3px;">${statusPill(club)}</div>
         </div>
+        ${isCustom ? `
+          <button class="btn-more" title="Настроить кружок" onclick="event.stopPropagation(); openEditClubModal(${club.id})">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+            </svg>
+          </button>
+        ` : ""}
       </div>
     </div>
   `;
@@ -1571,81 +1683,118 @@ function renderCurrentTab() {
   const el = document.getElementById("mainContent");
   if (state.activeTab === "wallet") {
     const clubs = filteredClubs();
-    const mealClubs = clubs.filter(c => ["canteen", "buffet"].includes(c.kind));
-    const mealTotal = mealClubs.reduce((s, c) => s + (c.last_balance || 0), 0);
-    const hasMealData = mealClubs.some(c => c.last_balance !== null && c.last_balance !== undefined);
-    const needTopup = clubs.filter(c => ["canteen", "buffet"].includes(c.kind) && c.last_balance !== null && c.last_balance <= (c.alert_threshold || 5)).length;
-    const dueClubs = clubs.filter(c => !["canteen", "buffet", "school_club"].includes(c.kind) && c.due_day && !c.paid_this_month).length;
     const activeChild = state.children.find(c => c.id === state.selectedChildId);
-
-    const schoolPack = clubs.filter(c => ["canteen", "buffet", "school_club"].includes(c.kind));
-    const extraClubs = clubs.filter(c => !["canteen", "buffet", "school_club"].includes(c.kind));
-
-    const summaryStatus = (needTopup + dueClubs) === 0
-      ? `<span class="hero-chip">✓ Всё оплачено, можно не волноваться</span>`
-      : `<span class="hero-chip">${needTopup ? `Пополнить питание: ${needTopup}` : ""}${needTopup && dueClubs ? " · " : ""}${dueClubs ? `Ждут оплаты: ${dueClubs}` : ""}</span>`;
+    const urgentList = clubs.filter(clubNeedsAction);
 
     let html = `
       <div class="tab-intro">
         <h1>Школьный баланс</h1>
-        <p>${activeChild ? `Счета и кружки: ${esc(activeChild.name)}` : "Остатки на питании и все кружки семьи"}</p>
-      </div>
-
-      <div class="hero-card">
-        <div class="hero-top">
-          <div>
-            <div class="hero-kicker">Баланс на питание в школе</div>
-            <div class="hero-amount">${hasMealData ? fmtByn(mealTotal) : "—"}</div>
-          </div>
-        </div>
-        <div class="hero-badges">
-          ${summaryStatus}
-          <span class="hero-chip">Траты за месяц: ${fmtByn(state.expenses ? state.expenses.total : 0)}</span>
-        </div>
-        <div class="hero-safe-note">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-          <span>Здесь ничего не списывается — вы всегда платите сами в своём банке</span>
-        </div>
+        <p>${activeChild ? `Счета и кружки: ${esc(activeChild.name)}` : "Нажмите на ребёнка, чтобы раскрыть счета · Оплата только вручную"}</p>
       </div>
     `;
 
-    html += `
-      <div class="sec-header">
-        <span class="sec-title">Школа и питание</span>
-        <span class="sec-sub">Проверяется в ЕРИП</span>
-      </div>
-      <div class="cards-stack">
-        ${schoolPack.length ? schoolPack.map(renderClubCard).join("") : `
-          <div class="empty-card">
-            <h3>Питание ещё не подключено</h3>
-            <p>Добавьте номер ученика в настройках профиля, чтобы видеть остаток в столовой и буфете.</p>
-            <button class="btn btn-soft" onclick="openSettingsModal()">Открыть настройки</button>
+    // 1. Самое главное сверху: нужно ли сейчас что-то оплачивать
+    if (urgentList.length) {
+      html += `
+        <div class="sec-header" style="margin-top:4px;">
+          <span class="sec-title">Требуют внимания</span>
+          <span class="sec-sub">${urgentList.length} шт.</span>
+        </div>
+        <div class="urgent-card">
+          ${urgentList.map(c => {
+            const th = childThemeById(c.child_id);
+            const amt = c.last_balance !== null && c.last_balance !== undefined
+              ? fmtByn(c.last_balance)
+              : (c.monthly_amount ? fmtByn(c.monthly_amount) : fmtByn(c.last_to_pay || 0));
+            return `
+              <div class="urgent-row">
+                <div style="min-width:0;">
+                  <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                    <span style="display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;background:${th.soft};color:${th.text};">${esc(childNameById(c.child_id))}</span>
+                    <span style="font-weight:700;font-size:14px;">${esc(clubFriendlyTitle(c))}</span>
+                  </div>
+                  <div style="font-size:12.5px;color:var(--muted);margin-top:3px;">${amt} · Счёт ${esc(c.account_number)}</div>
+                </div>
+                <button class="btn-pill btn-tonal" style="background:${th.soft};color:${th.text};flex-shrink:0;" onclick="openPayModal(${c.id}, false)">Оплатить</button>
+              </div>
+            `;
+          }).join("")}
+        </div>
+      `;
+    } else {
+      html += `
+        <div class="urgent-ok-banner">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          <span>Сейчас ничего платить не нужно — все балансы в норме</span>
+        </div>
+      `;
+    }
+
+    // 2. Выпадающие цветные карточки по каждому ребёнку
+    const visibleChildren = activeChild ? [activeChild] : state.children;
+    html += `<div class="sec-header"><span class="sec-title">Счета и кружки</span><span class="sec-sub">Тапните строку для оплаты</span></div>`;
+
+    if (!visibleChildren.length) {
+      html += `
+        <div class="empty-card">
+          <h3>Профилей пока нет</h3>
+          <p>Добавьте ребёнка в настройках, чтобы видеть счета питания и кружков.</p>
+          <button class="btn btn-soft" onclick="openSettingsModal()">Открыть настройки</button>
+        </div>
+      `;
+    } else {
+      html += visibleChildren.map(ch => {
+        const idx = state.children.findIndex(x => x.id === ch.id);
+        const th = CHILD_THEMES[(idx >= 0 ? idx : 0) % CHILD_THEMES.length];
+        const chClubs = state.clubs.filter(c => c.child_id === ch.id);
+        const meals = chClubs.filter(c => ["canteen", "buffet"].includes(c.kind));
+        const mealBal = meals.reduce((s, c) => s + (c.last_balance || 0), 0);
+        const hasMeal = meals.some(c => c.last_balance !== null && c.last_balance !== undefined);
+        const needCnt = chClubs.filter(clubNeedsAction).length;
+        const isOpen = activeChild ? true : Boolean(state.expandedChildren[ch.id]);
+        const letter = (ch.name || "?").trim().charAt(0).toUpperCase();
+
+        const subSummary = chClubs.length === 0
+          ? "Счета пока не привязаны"
+          : (needCnt > 0
+            ? `К оплате: ${needCnt} · Счетов: ${chClubs.length}`
+            : `Счетов: ${chClubs.length} · Всё оплачено`);
+
+        return `
+          <div class="child-group-card ${isOpen ? "open" : ""}" style="--c-accent:${th.accent};--c-soft:${th.soft};--c-text:${th.text};">
+            <button class="child-group-head" type="button" onclick="toggleChildGroup(${ch.id})">
+              <div class="child-group-left">
+                <span class="child-avatar" style="background:${th.accent};width:34px;height:34px;font-size:14px;">${esc(letter)}</span>
+                <div style="min-width:0;">
+                  <div class="card-title" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(ch.name)}</div>
+                  <div class="child-group-sub">${esc(subSummary)}</div>
+                </div>
+              </div>
+              <div class="child-group-right">
+                ${hasMeal ? `<span class="child-bal-chip">${fmtByn(mealBal)}</span>` : ""}
+                <svg class="chev-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              </div>
+            </button>
+            ${isOpen ? `
+              <div class="child-group-body">
+                ${chClubs.length ? chClubs.map(renderCompactAccRow).join("") : `
+                  <div style="padding:10px 0;font-size:13px;color:var(--muted);">Добавьте 10-значный счёт ученика в настройках или привяжите кружок ниже.</div>
+                `}
+              </div>
+            ` : ""}
           </div>
-        `}
-      </div>
-    `;
+        `;
+      }).join("");
+    }
 
     html += `
-      <div class="sec-header">
-        <span class="sec-title">Кружки и секции</span>
-        <span class="sec-sub">Напоминания до срока</span>
-      </div>
-      <div class="cards-stack">
-        ${extraClubs.length ? extraClubs.map(renderClubCard).join("") : `
-          <div class="empty-card">
-            <h3>Пока нет кружков</h3>
-            <p>Привяжите робототехнику, танцы или любую секцию Минска — напомним о платеже заранее.</p>
-          </div>
-        `}
-      </div>
-
       <button class="add-big-card" onclick="openClubModal()">
         <div class="add-big-plus">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         </div>
         <div>
           <div class="add-big-title">Добавить кружок или секцию</div>
-          <div class="add-big-sub">Поиск по 700+ организациям Минска и напоминания об оплате</div>
+          <div class="add-big-sub">Поиск по 700+ организациям Минска и напоминания до срока оплаты</div>
         </div>
       </button>
     `;
@@ -2092,6 +2241,11 @@ function openPayModal(clubId, focusConfirm = false) {
       showToast("Отлично! Оплата отмечена");
       await loadBootstrap();
     }
+  };
+
+  document.getElementById("payEditBtn").onclick = () => {
+    closeModal("modalPay");
+    openEditClubModal(club.id);
   };
 
   const delWrap = document.getElementById("payDeleteWrap");
