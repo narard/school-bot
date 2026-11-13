@@ -91,6 +91,17 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         """)
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS meal_accounts (
+            tg_id INTEGER NOT NULL,
+            account_number TEXT NOT NULL,
+            label TEXT DEFAULT 'Ученик',
+            district TEXT DEFAULT 'Фрунзенский район',
+            alert_threshold REAL DEFAULT 5.0,
+            last_alert_date TEXT,
+            PRIMARY KEY (tg_id, account_number)
+        );
+        """)
         conn.commit()
 
 def save_user(tg_id: int, login: str, password: str, active_pupil: Dict[str, Any], pupils: List[Dict[str, Any]]):
@@ -231,3 +242,72 @@ def toggle_notifications(tg_id: int) -> bool:
         conn.execute("UPDATE users SET notify_new_grades = ? WHERE tg_id = ?", (new_val, tg_id))
         conn.commit()
         return new_val == 1
+
+
+def save_meal_account(
+    tg_id: int,
+    account_number: str,
+    label: str = "Ученик",
+    district: str = "Фрунзенский район",
+    alert_threshold: float = 5.0,
+):
+    with get_db() as conn:
+        conn.execute(
+            """
+            INSERT INTO meal_accounts (tg_id, account_number, label, district, alert_threshold)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(tg_id, account_number) DO UPDATE SET
+                label=excluded.label,
+                district=excluded.district,
+                alert_threshold=excluded.alert_threshold;
+            """,
+            (tg_id, account_number.strip(), label.strip() or "Ученик", district, float(alert_threshold)),
+        )
+        conn.commit()
+
+
+def get_meal_accounts(tg_id: int) -> List[Dict[str, Any]]:
+    with get_db() as conn:
+        cur = conn.execute(
+            "SELECT * FROM meal_accounts WHERE tg_id = ? ORDER BY rowid ASC",
+            (tg_id,),
+        )
+        return [dict(r) for r in cur.fetchall()]
+
+
+def get_meal_account(tg_id: int, account_number: str) -> Optional[Dict[str, Any]]:
+    with get_db() as conn:
+        cur = conn.execute(
+            "SELECT * FROM meal_accounts WHERE tg_id = ? AND account_number = ?",
+            (tg_id, account_number.strip()),
+        )
+        row = cur.fetchone()
+        return dict(row) if row else None
+
+
+def delete_meal_account(tg_id: int, account_number: str):
+    with get_db() as conn:
+        conn.execute(
+            "DELETE FROM meal_accounts WHERE tg_id = ? AND account_number = ?",
+            (tg_id, account_number.strip()),
+        )
+        conn.commit()
+
+
+def update_meal_threshold(tg_id: int, account_number: str, threshold: float):
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE meal_accounts SET alert_threshold = ? WHERE tg_id = ? AND account_number = ?",
+            (float(threshold), tg_id, account_number.strip()),
+        )
+        conn.commit()
+
+
+def mark_meal_alert_sent(tg_id: int, account_number: str, date_str: str):
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE meal_accounts SET last_alert_date = ? WHERE tg_id = ? AND account_number = ?",
+            (date_str, tg_id, account_number.strip()),
+        )
+        conn.commit()
+

@@ -1,10 +1,11 @@
 import os
+import re
 import sys
 import time
 import logging
 import threading
-from datetime import datetime, timedelta
-from typing import Dict, Any, Optional, List
+from datetime import datetime, timedelta, date
+from typing import Dict, Any, Optional, List, Tuple
 
 import telebot
 from telebot import types
@@ -16,6 +17,11 @@ from services.currency import format_currency_message
 from services.movies import get_random_movie, get_rezka_url
 from services.ai_helper import try_eval_math, ask_homework_tutor
 from services.image_gen import generate_image_pollinations, is_draw_request
+from services.meal_erip import (
+    DISTRICT_SHORT_KEYS,
+    get_pupil_meal_status,
+    format_meal_message,
+)
 import asyncio
 
 logging.basicConfig(
@@ -83,21 +89,22 @@ def get_main_keyboard(has_multi_pupils: bool = False) -> types.ReplyKeyboardMark
     b4 = types.KeyboardButton("📊 Четвертные оценки")
     b5 = types.KeyboardButton("💡 AI-помощник")
     b6 = types.KeyboardButton("🎨 Нарисовать")
-    b7 = types.KeyboardButton("🌤 Погода")
-    b8 = types.KeyboardButton("💵 Курсы валют")
-    b9 = types.KeyboardButton("🎬 Кино на вечер")
-    b10 = types.KeyboardButton("ℹ️ Справка")
-    
+    b7 = types.KeyboardButton("🍽 Питание")
+    b8 = types.KeyboardButton("🌤 Погода")
+    b9 = types.KeyboardButton("💵 Курсы валют")
+    b10 = types.KeyboardButton("🎬 Кино на вечер")
+
     markup.add(b1, b2)
     markup.add(b3, b4)
     markup.add(b5, b6)
     markup.add(b7, b8)
     markup.add(b9, b10)
-    
+
     extra = []
     if has_multi_pupils:
         extra.append(types.KeyboardButton("🔄 Сменить дневник"))
     extra.append(types.KeyboardButton("⚙️ Настройки"))
+    extra.append(types.KeyboardButton("ℹ️ Справка"))
     markup.add(*extra)
     return markup
 
@@ -105,8 +112,46 @@ def get_settings_keyboard(has_multi_pupils: bool, notifications_enabled: bool) -
     markup = types.InlineKeyboardMarkup()
     notify_text = "🔔 Уведомления: ВКЛ" if notifications_enabled else "🔕 Уведомления: ВЫКЛ"
     markup.add(types.InlineKeyboardButton(notify_text, callback_data="toggle_notify"))
+    markup.add(types.InlineKeyboardButton("🍽 Счета питания (ЕРИП)", callback_data="meal_manage"))
     if has_multi_pupils:
         markup.add(types.InlineKeyboardButton("🔄 Переключить ученика", callback_data="switch_pupil"))
+    return markup
+
+
+def get_meal_districts_keyboard() -> types.InlineKeyboardMarkup:
+    markup = types.InlineKeyboardMarkup(row_width=2)
+    buttons = []
+    for idx, dname in enumerate(DISTRICT_SHORT_KEYS):
+        short = dname.replace(" район", "")
+        prefix = "⭐ " if idx == 0 else ""
+        buttons.append(types.InlineKeyboardButton(f"{prefix}{short}", callback_data=f"meal_dist:{idx}"))
+    markup.add(*buttons)
+    return markup
+
+
+def get_meal_actions_keyboard(account_number: str, threshold: float) -> types.InlineKeyboardMarkup:
+    markup = types.InlineKeyboardMarkup(row_width=2)
+    thr_label = f"{int(threshold)} BYN" if threshold > 0 else "Выкл"
+    markup.add(
+        types.InlineKeyboardButton("🔄 Обновить", callback_data=f"meal_refresh:{account_number}"),
+        types.InlineKeyboardButton(f"🔔 Порог: {thr_label}", callback_data=f"meal_thr_menu:{account_number}"),
+    )
+    markup.add(
+        types.InlineKeyboardButton("➕ Добавить счёт", callback_data="meal_add_start"),
+        types.InlineKeyboardButton("🗑 Удалить", callback_data=f"meal_del:{account_number}"),
+    )
+    return markup
+
+
+def get_meal_threshold_keyboard(account_number: str) -> types.InlineKeyboardMarkup:
+    markup = types.InlineKeyboardMarkup(row_width=2)
+    markup.add(
+        types.InlineKeyboardButton("🔔 Ниже 3 BYN", callback_data=f"meal_set_thr:{account_number}:3"),
+        types.InlineKeyboardButton("🔔 Ниже 5 BYN", callback_data=f"meal_set_thr:{account_number}:5"),
+        types.InlineKeyboardButton("🔔 Ниже 10 BYN", callback_data=f"meal_set_thr:{account_number}:10"),
+        types.InlineKeyboardButton("🔕 Выкл напоминания", callback_data=f"meal_set_thr:{account_number}:0"),
+    )
+    markup.add(types.InlineKeyboardButton("⬅️ Назад", callback_data=f"meal_refresh:{account_number}"))
     return markup
 
 def get_pupils_selection_keyboard(pupils: List[Dict[str, Any]]) -> types.InlineKeyboardMarkup:
@@ -458,8 +503,12 @@ HELP_TEXT = (
     "• <code>/1</code> — Расписание на Завтра\n"
     "• <code>/7</code> — Расписание на Всю неделю\n"
     "• <code>/m</code> — Четвертные оценки\n"
+    "• <code>/meal</code> — Баланс питания в столовой и буфете (ЕРИП)\n"
+    "• <code>/meal_add 1234567890 Имя</code> — Быстро привязать счёт питания\n"
     "• <code>/.</code> &lt;вопрос&gt; — Спросить AI-помощника\n"
     "• <code>/draw</code> &lt;запрос&gt; — Нарисовать картинку\n\n"
+    "🍽 <b>ПИТАНИЕ (СТОЛОВАЯ + БУФЕТ)</b>\n"
+    "• Нажмите кнопку <b>🍽 Питание</b>, чтобы привязать 10-значный лицевой счёт ученика и видеть актуальный остаток напрямую из ЕРИП + получать уведомления, когда баланс заканчивается.\n\n"
     "🎨 <b>ГЕНЕРАТОР КАРТИНОК (FLUX)</b>\n"
     "• Напишите боту: <i>«Нарисуй рыжего котика в космосе»</i> или команду <code>/draw сказочный замок</code> — через несколько секунд получите красивую иллюстрацию!\n\n"
     "💵 <b>СЕМЕЙНЫЕ СЕРВИСЫ</b>\n"
@@ -689,6 +738,249 @@ def callback_toggle_notify(call: types.CallbackQuery):
     status_str = "включены" if is_on else "отключены"
     bot.answer_callback_query(call.id, f"Уведомления {status_str}!")
 
+
+def _render_meal_card(account_row: Dict[str, Any]) -> Tuple[str, types.InlineKeyboardMarkup]:
+    acc = account_row["account_number"]
+    district = account_row.get("district") or "Фрунзенский район"
+    label = account_row.get("label") or "Ученик"
+    threshold = float(account_row.get("alert_threshold") or 0.0)
+    status = get_pupil_meal_status(district, acc)
+    text = format_meal_message(label, district, acc, status, alert_threshold=threshold)
+    markup = get_meal_actions_keyboard(acc, threshold)
+    return text, markup
+
+
+def _send_meal_setup_prompt(chat_id: int):
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton("➕ Подключить счёт ЕРИП", callback_data="meal_add_start"))
+    bot.send_message(
+        chat_id,
+        "🍽 <b>Школьное питание (Столовая + Буфет)</b>\n\n"
+        "Лицевой счёт ЕРИП ещё не привязан.\n\n"
+        "Нажмите кнопку ниже или сразу отправьте команду в виде:\n"
+        "<code>/meal_add 1234567890 Иван</code>",
+        reply_markup=markup,
+    )
+
+
+def _save_and_show_meal_account(
+    chat_id: int,
+    owner_tg_id: int,
+    account_number: str,
+    label: str,
+    district: str = "Фрунзенский район",
+):
+    wait_msg = bot.send_message(chat_id, f"⏳ Проверяю счёт <code>{account_number}</code> в ЕРИП ({district})...")
+    status = get_pupil_meal_status(district, account_number)
+    if not status.get("ok"):
+        err = status.get("error") or "Счёт не найден в ЕРИП"
+        bot.edit_message_text(
+            f"❌ Не удалось найти счёт <code>{account_number}</code> ({district}):\n<i>{err}</i>\n\n"
+            f"Проверьте номер счёта и район, затем попробуйте снова: /meal_add",
+            chat_id,
+            wait_msg.message_id,
+        )
+        return
+
+    db.save_meal_account(owner_tg_id, account_number, label=label, district=district, alert_threshold=5.0)
+    text = format_meal_message(label, district, account_number, status, alert_threshold=5.0)
+    markup = get_meal_actions_keyboard(account_number, 5.0)
+    bot.edit_message_text(
+        f"✅ <b>Счёт питания сохранён!</b>\n\n{text}",
+        chat_id,
+        wait_msg.message_id,
+        reply_markup=markup,
+    )
+
+
+@bot.message_handler(commands=["meal", "food", "eat"])
+@bot.message_handler(func=lambda m: m.text and (m.text in ("🍽 Питание", "Питание", "Буфет") or m.text.startswith("🍽")))
+def handle_meal_balance(message: types.Message):
+    user = resolve_user_context(message)
+    if not user:
+        bot.send_message(message.chat.id, "Сначала выполните вход: /start")
+        return
+    accounts = db.get_meal_accounts(user["tg_id"])
+    if not accounts:
+        _send_meal_setup_prompt(message.chat.id)
+        return
+
+    wait_msg = bot.send_message(message.chat.id, "⏳ Запрашиваю баланс в ЕРИП (столовая и буфет)...")
+    first = True
+    for acc_row in accounts:
+        text, markup = _render_meal_card(acc_row)
+        if first:
+            bot.edit_message_text(text, message.chat.id, wait_msg.message_id, reply_markup=markup)
+            first = False
+        else:
+            bot.send_message(message.chat.id, text, reply_markup=markup)
+
+
+@bot.message_handler(commands=["meal_add"])
+def handle_meal_add_cmd(message: types.Message):
+    user = resolve_user_context(message)
+    if not user:
+        bot.send_message(message.chat.id, "Сначала выполните вход: /start")
+        return
+    args = re.sub(r"^/meal_add(@[a-zA-Z0-9_]+)?\s*", "", message.text.strip(), flags=re.IGNORECASE).strip()
+    if not args:
+        bot.send_message(
+            message.chat.id,
+            "📍 Выберите район Минска для школы (КШП):",
+            reply_markup=get_meal_districts_keyboard(),
+        )
+        return
+
+    parts = args.split(maxsplit=1)
+    acc = re.sub(r"\D", "", parts[0])
+    if len(acc) < 6:
+        bot.send_message(
+            message.chat.id,
+            "❌ Укажите корректный 10-значный номер ученика.\nПример: <code>/meal_add 1234567890 Иван</code>",
+        )
+        return
+    label = parts[1].strip() if len(parts) > 1 else (user.get("active_pupil_name") or "Ученик")
+    _save_and_show_meal_account(message.chat.id, user["tg_id"], acc, label, district="Фрунзенский район")
+
+
+@bot.callback_query_handler(func=lambda c: c.data == "meal_manage")
+def callback_meal_manage(call: types.CallbackQuery):
+    user = resolve_callback_user(call)
+    if not user:
+        bot.answer_callback_query(call.id, "Сначала выполните вход: /start")
+        return
+    accounts = db.get_meal_accounts(user["tg_id"])
+    markup = types.InlineKeyboardMarkup()
+    for a in accounts:
+        lbl = f"🍽 {a['label']} ({a['account_number']})"
+        markup.add(types.InlineKeyboardButton(lbl, callback_data=f"meal_refresh:{a['account_number']}"))
+    markup.add(types.InlineKeyboardButton("➕ Добавить счёт ЕРИП", callback_data="meal_add_start"))
+    msg_text = (
+        "🍽 <b>Привязанные счета школьного питания:</b>\n\nНажмите на счёт, чтобы посмотреть баланс, или добавьте новый."
+        if accounts
+        else "🍽 У вас пока нет привязанных счетов питания.\nНажмите кнопку ниже, чтобы подключить!"
+    )
+    bot.edit_message_text(msg_text, call.message.chat.id, call.message.message_id, reply_markup=markup)
+    bot.answer_callback_query(call.id)
+
+
+@bot.callback_query_handler(func=lambda c: c.data == "meal_add_start")
+def callback_meal_add_start(call: types.CallbackQuery):
+    user = resolve_callback_user(call)
+    if not user:
+        bot.answer_callback_query(call.id, "Сначала выполните вход: /start")
+        return
+    bot.edit_message_text(
+        "📍 Выберите район Минска для школы (КШП):",
+        call.message.chat.id,
+        call.message.message_id,
+        reply_markup=get_meal_districts_keyboard(),
+    )
+    bot.answer_callback_query(call.id)
+
+
+@bot.callback_query_handler(func=lambda c: c.data.startswith("meal_dist:"))
+def callback_meal_select_district(call: types.CallbackQuery):
+    user = resolve_callback_user(call)
+    if not user:
+        bot.answer_callback_query(call.id, "Сначала выполните вход: /start")
+        return
+    try:
+        idx = int(call.data.split(":")[1])
+        district = DISTRICT_SHORT_KEYS[idx]
+    except Exception:
+        bot.answer_callback_query(call.id, "Неизвестный район")
+        return
+
+    bot.answer_callback_query(call.id)
+    msg = bot.send_message(
+        call.message.chat.id,
+        f"📍 Район: <b>{district}</b>\n\n"
+        f"Теперь отправьте <b>10-значный лицевой счёт ученика</b> и (по желанию) имя через пробел.\n"
+        f"Например: <code>1234567890 Иван</code>",
+    )
+    bot.register_next_step_handler(msg, process_meal_account_step, user["tg_id"], district)
+
+
+def process_meal_account_step(message: types.Message, owner_tg_id: int, district: str):
+    raw = (message.text or "").strip()
+    if not raw or raw.startswith("/"):
+        return
+    parts = raw.split(maxsplit=1)
+    acc = re.sub(r"\D", "", parts[0])
+    if len(acc) < 6:
+        bot.send_message(
+            message.chat.id,
+            "❌ Неверный формат номера счёта. Попробуйте через меню <b>🍽 Питание</b> или командой:\n"
+            "<code>/meal_add 1234567890 Иван</code>",
+        )
+        return
+    user = db.get_user(owner_tg_id)
+    default_label = (user or {}).get("active_pupil_name") or "Ученик"
+    label = parts[1].strip() if len(parts) > 1 else default_label
+    _save_and_show_meal_account(message.chat.id, owner_tg_id, acc, label, district=district)
+
+
+@bot.callback_query_handler(func=lambda c: c.data.startswith("meal_refresh:"))
+def callback_meal_refresh(call: types.CallbackQuery):
+    user = resolve_callback_user(call)
+    if not user:
+        bot.answer_callback_query(call.id, "Сначала выполните вход: /start")
+        return
+    acc = call.data.split(":", 1)[1]
+    acc_row = db.get_meal_account(user["tg_id"], acc)
+    if not acc_row:
+        bot.answer_callback_query(call.id, "Счёт не найден")
+        return
+    bot.answer_callback_query(call.id, "Обновляю данные из ЕРИП...")
+    text, markup = _render_meal_card(acc_row)
+    try:
+        bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=markup)
+    except Exception:
+        pass
+
+
+@bot.callback_query_handler(func=lambda c: c.data.startswith("meal_thr_menu:"))
+def callback_meal_thr_menu(call: types.CallbackQuery):
+    acc = call.data.split(":", 1)[1]
+    bot.edit_message_reply_markup(
+        call.message.chat.id,
+        call.message.message_id,
+        reply_markup=get_meal_threshold_keyboard(acc),
+    )
+    bot.answer_callback_query(call.id, "Выберите порог напоминания")
+
+
+@bot.callback_query_handler(func=lambda c: c.data.startswith("meal_set_thr:"))
+def callback_meal_set_thr(call: types.CallbackQuery):
+    user = resolve_callback_user(call)
+    if not user:
+        bot.answer_callback_query(call.id, "Сначала выполните вход: /start")
+        return
+    _, acc, thr_str = call.data.split(":", 2)
+    thr = float(thr_str)
+    db.update_meal_threshold(user["tg_id"], acc, thr)
+    acc_row = db.get_meal_account(user["tg_id"], acc)
+    if acc_row:
+        text, markup = _render_meal_card(acc_row)
+        try:
+            bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=markup)
+        except Exception:
+            pass
+    bot.answer_callback_query(call.id, f"Порог обновлён: {int(thr)} BYN" if thr > 0 else "Напоминания выключены")
+
+
+@bot.callback_query_handler(func=lambda c: c.data.startswith("meal_del:"))
+def callback_meal_delete(call: types.CallbackQuery):
+    user = resolve_callback_user(call)
+    if not user:
+        bot.answer_callback_query(call.id, "Сначала выполните вход: /start")
+        return
+    acc = call.data.split(":", 1)[1]
+    db.delete_meal_account(user["tg_id"], acc)
+    bot.edit_message_text(f"🗑 Счёт питания <code>{acc}</code> удалён.", call.message.chat.id, call.message.message_id)
+    bot.answer_callback_query(call.id, "Удалено")
+
 @bot.message_handler(content_types=["text"])
 def handle_all_other_text(message: types.Message):
     text = message.text.strip()
@@ -839,6 +1131,49 @@ def notifier_loop():
                             except Exception:
                                 pass
                         db.mark_daily_reminder_sent(u["tg_id"], digest_key)
+
+            # 5. Контроль баланса питания в 18:00 (Пн-Пт)
+            if now.weekday() < 5 and now.hour == 18 and now.minute < 30:
+                for u in users:
+                    if not u.get("notify_new_grades", 1):
+                        continue
+                    for acc_row in db.get_meal_accounts(u["tg_id"]):
+                        thr = float(acc_row.get("alert_threshold") or 0.0)
+                        if thr <= 0:
+                            continue
+                        last_dt_str = acc_row.get("last_alert_date")
+                        if last_dt_str:
+                            try:
+                                if (now.date() - date.fromisoformat(last_dt_str)).days < 2:
+                                    continue
+                            except ValueError:
+                                pass
+                        status = get_pupil_meal_status(
+                            acc_row.get("district") or "Фрунзенский район",
+                            acc_row["account_number"],
+                        )
+                        if not status.get("ok"):
+                            continue
+                        c_bal = status.get("canteen", {}).get("balance")
+                        b_bal = status.get("buffet", {}).get("balance")
+                        low_parts = []
+                        if c_bal is not None and c_bal <= thr:
+                            low_parts.append(f"🥗 Столовая: <b>{c_bal:.2f} BYN</b>".replace(".", ","))
+                        if b_bal is not None and b_bal <= thr:
+                            low_parts.append(f"🥐 Буфет: <b>{b_bal:.2f} BYN</b>".replace(".", ","))
+                        if low_parts:
+                            alert = (
+                                f"⚠️ <b>Заканчиваются деньги на школьное питание!</b>\n\n"
+                                f"👤 <b>{acc_row.get('label', 'Ученик')}</b> (счёт <code>{acc_row['account_number']}</code>)\n"
+                                + "\n".join(low_parts)
+                                + f"\n\nНажмите <b>🍽 Питание</b>, чтобы увидеть детали."
+                            )
+                            for cid in db.get_all_target_chat_ids_for_user(u["tg_id"]):
+                                try:
+                                    bot.send_message(cid, alert)
+                                except Exception:
+                                    pass
+                            db.mark_meal_alert_sent(u["tg_id"], acc_row["account_number"], today_str)
 
         except Exception as e:
             logger.error(f"Error in background notifier loop: {e}")
