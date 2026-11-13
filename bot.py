@@ -647,6 +647,28 @@ async def handle_probe(request):
     except Exception as e:
         return web.Response(text=f"FAILED: {type(e).__name__}: {e}, time={time.time()-t0:.2f}s", status=500)
 
+async def handle_radar_webhook(request):
+    try:
+        from radar import radar_bot
+        raw_body = await request.text()
+        radar_bot.process_webhook_update(raw_body)
+        return web.Response(text="OK")
+    except Exception as e:
+        logger.error(f"Radar webhook error: {e}")
+        return web.Response(text="ERR", status=500)
+
+async def handle_radar_status(request):
+    try:
+        from radar import database as radar_db
+        return web.json_response({
+            "ok": True,
+            "bot": "@airadar_RPbot",
+            "mode": "render_cloud_webhook",
+            "stats": radar_db.get_stats(),
+        })
+    except Exception as e:
+        return web.json_response({"ok": False, "error": str(e)}, status=500)
+
 async def start_web_server():
     port = int(os.environ.get("PORT", 8080))
     app = web.Application()
@@ -655,6 +677,8 @@ async def start_web_server():
     app.router.add_get("/probe", handle_probe)
     app.router.add_get("/api/models", handle_models)
     app.router.add_post("/api/gemini", handle_gemini_proxy)
+    app.router.add_post("/radar_webhook", handle_radar_webhook)
+    app.router.add_get("/radar_status", handle_radar_status)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", port)
@@ -669,9 +693,15 @@ async def main():
     except Exception as e:
         logger.warning(f"Web server not started: {e}")
 
-    # Если мы в облаке Render — работаем только как облачный AI-прокси
+    # Если мы в облаке Render — запускаем облачный AI-прокси И облачного бота ИИ-Радар 2.0
     if os.environ.get("RENDER"):
-        logger.info("Render detected: running in AI Cloud Proxy mode (no Telegram polling)")
+        logger.info("Render detected: starting AI Cloud Proxy + AIRADAR 2.0 Cloud Bot...")
+        try:
+            from radar import radar_bot
+            await asyncio.to_thread(radar_bot.start_cloud_mode, "https://school-bot-zbh4.onrender.com")
+            logger.info("AIRADAR 2.0 Cloud Bot started successfully on Render!")
+        except Exception as e:
+            logger.error(f"Failed to start AIRADAR 2.0 on Render: {e}", exc_info=True)
         while True:
             await asyncio.sleep(3600)
 
