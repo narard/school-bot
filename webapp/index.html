@@ -88,6 +88,7 @@
       color: var(--text);
       min-height: 100vh;
       padding-bottom: 96px;
+      overflow-x: clip;
       -webkit-font-smoothing: antialiased;
     }
 
@@ -581,7 +582,9 @@
     .bar-fill {
       height: 100%;
       border-radius: 999px;
-      transition: width 0.35s ease;
+      transform-origin: left center;
+      animation: m3BarGrow 0.48s cubic-bezier(0.22, 1, 0.36, 1) both;
+      transition: width 0.38s cubic-bezier(0.22, 1, 0.36, 1);
     }
 
     .tx-row {
@@ -705,9 +708,20 @@
     }
     .chev-icon {
       color: var(--muted);
-      transition: transform 0.2s;
+      transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
     }
     .child-group-card.open .chev-icon { transform: rotate(180deg); }
+    .child-group-collapse {
+      display: grid;
+      grid-template-rows: 0fr;
+      opacity: 0;
+      transition: grid-template-rows 0.28s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.22s ease;
+    }
+    .child-group-card.open .child-group-collapse {
+      grid-template-rows: 1fr;
+      opacity: 1;
+    }
+    .child-group-collapse-inner { overflow: hidden; }
     .child-group-body {
       border-top: 1px solid var(--surface-soft);
       padding: 6px 16px 12px;
@@ -965,11 +979,19 @@
       inset: 0;
       background: rgba(0, 0, 0, 0.42);
       z-index: 90;
-      display: none;
+      display: flex;
       align-items: flex-end;
       justify-content: center;
+      visibility: hidden;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.22s ease, visibility 0.22s ease;
     }
-    .modal-backdrop.open { display: flex; }
+    .modal-backdrop.open {
+      visibility: visible;
+      opacity: 1;
+      pointer-events: auto;
+    }
     .modal {
       width: 100%;
       max-width: 560px;
@@ -979,10 +1001,18 @@
       border-radius: 28px 28px 0 0;
       padding: 12px 20px 28px;
       box-shadow: var(--shadow-modal);
+      transform: translateY(42px) scale(0.985);
+      transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .modal-backdrop.open .modal {
+      transform: translateY(0) scale(1);
     }
     @media (min-width: 600px) {
       .modal-backdrop { align-items: center; padding: 16px; }
-      .modal { border-radius: 28px; }
+      .modal {
+        border-radius: 28px;
+        transform: translateY(18px) scale(0.96);
+      }
     }
     .sheet-handle {
       width: 38px;
@@ -1108,7 +1138,7 @@
       position: fixed;
       top: 66px;
       left: 50%;
-      transform: translateX(-50%);
+      transform: translate(-50%, -12px) scale(0.94);
       background: #1F1F1F;
       color: #FFFFFF;
       padding: 10px 18px;
@@ -1116,9 +1146,87 @@
       font-size: 13px;
       font-weight: 600;
       z-index: 120;
-      display: none;
+      visibility: hidden;
+      opacity: 0;
+      pointer-events: none;
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
       white-space: nowrap;
+      transition: opacity 0.2s ease, transform 0.26s cubic-bezier(0.22, 1, 0.36, 1), visibility 0.2s ease;
+    }
+    .toast.show {
+      visibility: visible;
+      opacity: 1;
+      transform: translate(-50%, 0) scale(1);
+    }
+
+    /* Нативные анимации Material 3 и тактильный отклик */
+    @keyframes m3FadeUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes m3SlideNext {
+      from { opacity: 0; transform: translateX(26px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes m3SlidePrev {
+      from { opacity: 0; transform: translateX(-26px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes m3BarGrow {
+      from { transform: scaleX(0); }
+      to { transform: scaleX(1); }
+    }
+
+    .anim-tab > * {
+      animation: m3FadeUp 0.26s cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+    .anim-tab > *:nth-child(2) { animation-delay: 20ms; }
+    .anim-tab > *:nth-child(3) { animation-delay: 40ms; }
+    .anim-tab > *:nth-child(4) { animation-delay: 60ms; }
+    .anim-tab > *:nth-child(5) { animation-delay: 80ms; }
+    .anim-tab > *:nth-child(n+6) { animation-delay: 95ms; }
+
+    .anim-stagger > .lesson-card {
+      animation: m3FadeUp 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+    .anim-stagger > .lesson-card:nth-child(1) { animation-delay: 15ms; }
+    .anim-stagger > .lesson-card:nth-child(2) { animation-delay: 35ms; }
+    .anim-stagger > .lesson-card:nth-child(3) { animation-delay: 55ms; }
+    .anim-stagger > .lesson-card:nth-child(4) { animation-delay: 75ms; }
+    .anim-stagger > .lesson-card:nth-child(5) { animation-delay: 95ms; }
+    .anim-stagger > .lesson-card:nth-child(n+6) { animation-delay: 110ms; }
+
+    .anim-slide-next {
+      animation: m3SlideNext 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+    .anim-slide-prev {
+      animation: m3SlidePrev 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+
+    body, .topbar, .bottom-nav, .card-box, .child-group-card, .stat-tile {
+      transition: background-color 0.24s ease, color 0.2s ease, border-color 0.2s ease;
+    }
+    .btn, .btn-pill, .child-pill, .seg-btn, .add-big-card, .icon-circle-btn, .nav-arrow, .nav-pill, .acc-row {
+      transition: transform 0.16s cubic-bezier(0.22, 1, 0.36, 1), background-color 0.18s ease, box-shadow 0.18s ease, opacity 0.16s ease;
+    }
+    .btn:active, .btn-pill:active, .child-pill:active, .seg-btn:active, .add-big-card:active {
+      transform: scale(0.97);
+    }
+    .icon-circle-btn:active, .nav-arrow:active {
+      transform: scale(0.89);
+    }
+    .nav-item:active .nav-pill {
+      transform: scale(0.91);
+    }
+    .acc-row:active {
+      transform: scale(0.985);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+      }
     }
   </style>
 </head>
@@ -1510,9 +1618,17 @@ const state = {
   dayOffset: 0, weekOffset: 0, monthOffset: 0, expandedWeekIdx: 0,
   expandedChildren: {},
   expenses: null, diary: null,
+  swipeDir: 0, tabAnim: true,
   selectedOrg: null, selectedService: null, inspectServices: [], searchItems: [],
   payClub: null,
 };
+
+function triggerAnim(el, cls = "anim-tab") {
+  if (!el) return;
+  el.classList.remove("anim-tab", "anim-slide-next", "anim-slide-prev");
+  void el.offsetWidth;
+  el.classList.add(cls);
+}
 
 function fmtByn(v) {
   if (v === null || v === undefined || isNaN(v)) return "—";
@@ -1524,9 +1640,9 @@ function esc(s) {
 function showToast(msg) {
   const el = document.getElementById("toast");
   el.textContent = msg;
-  el.style.display = "block";
+  el.classList.add("show");
   clearTimeout(window._tt);
-  window._tt = setTimeout(() => el.style.display = "none", 2600);
+  window._tt = setTimeout(() => el.classList.remove("show"), 2600);
 }
 function showFormErr(id, msg) {
   const el = document.getElementById(id);
@@ -1646,6 +1762,7 @@ function updateChildrenScrollArrows() {
 
 function selectChild(cid) {
   state.selectedChildId = cid;
+  state.tabAnim = true;
   renderTopTabs();
   if (state.activeTab === "expenses") loadExpenses();
   else if (state.activeTab === "diary") loadDiary();
@@ -1654,6 +1771,7 @@ function selectChild(cid) {
 
 function switchTab(tab) {
   state.activeTab = tab;
+  state.tabAnim = true;
   document.querySelectorAll(".nav-item").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
   if (tab === "expenses") loadExpenses();
   else if (tab === "diary") loadDiary();
@@ -1728,6 +1846,12 @@ function clubNeedsAction(club) {
 
 function toggleChildGroup(cid) {
   state.expandedChildren[cid] = !state.expandedChildren[cid];
+  const card = document.getElementById(`childCard-${cid}`);
+  if (card) {
+    card.classList.toggle("open", Boolean(state.expandedChildren[cid]));
+    return;
+  }
+  state.tabAnim = false;
   renderCurrentTab();
 }
 
@@ -1915,7 +2039,7 @@ function renderCurrentTab() {
             : `Счетов: ${chClubs.length} · Всё оплачено`);
 
         return `
-          <div class="child-group-card ${isOpen ? "open" : ""}" style="--c-accent:${th.accent};--c-soft:${th.soft};--c-text:${th.text};">
+          <div id="childCard-${ch.id}" class="child-group-card ${isOpen ? "open" : ""}" style="--c-accent:${th.accent};--c-soft:${th.soft};--c-text:${th.text};">
             <button class="child-group-head" type="button" onclick="toggleChildGroup(${ch.id})">
               <div class="child-group-left">
                 <span class="child-avatar" style="background:${th.accent};width:34px;height:34px;font-size:14px;">${esc(letter)}</span>
@@ -1929,24 +2053,26 @@ function renderCurrentTab() {
                 <svg class="chev-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
               </div>
             </button>
-            ${isOpen ? `
-              <div class="child-group-body">
-                ${(() => {
-                  const sections = chClubs.filter(c => !["canteen", "buffet"].includes(c.kind));
-                  if (!chClubs.length) {
-                    return renderInlineEripBox(ch);
-                  }
-                  let inner = "";
-                  if (meals.length) {
-                    inner += `<div class="sub-dept-head">Питание</div>` + meals.map(renderCompactAccRow).join("");
-                  }
-                  if (sections.length) {
-                    inner += `<div class="sub-dept-head ${meals.length ? "spaced" : ""}">Секции / кружки</div>` + sections.map(renderCompactAccRow).join("");
-                  }
-                  return inner;
-                })()}
+            <div class="child-group-collapse">
+              <div class="child-group-collapse-inner">
+                <div class="child-group-body">
+                  ${(() => {
+                    const sections = chClubs.filter(c => !["canteen", "buffet"].includes(c.kind));
+                    if (!chClubs.length) {
+                      return renderInlineEripBox(ch);
+                    }
+                    let inner = "";
+                    if (meals.length) {
+                      inner += `<div class="sub-dept-head">Питание</div>` + meals.map(renderCompactAccRow).join("");
+                    }
+                    if (sections.length) {
+                      inner += `<div class="sub-dept-head ${meals.length ? "spaced" : ""}">Секции / кружки</div>` + sections.map(renderCompactAccRow).join("");
+                    }
+                    return inner;
+                  })()}
+                </div>
               </div>
-            ` : ""}
+            </div>
           </div>
         `;
       }).join("");
@@ -1965,6 +2091,10 @@ function renderCurrentTab() {
     `;
 
     el.innerHTML = html;
+    if (state.tabAnim) {
+      triggerAnim(el, "anim-tab");
+      state.tabAnim = false;
+    }
   } else if (state.activeTab === "expenses") {
     renderExpensesTab();
   } else if (state.activeTab === "diary") {
@@ -2029,13 +2159,23 @@ function renderExpensesTab() {
     </div>
   `;
   el.innerHTML = html;
+  if (state.tabAnim) {
+    triggerAnim(el, "anim-tab");
+    state.tabAnim = false;
+  }
 }
 
 async function loadDiary() {
-  document.getElementById("mainContent").innerHTML = `
-    <div class="tab-intro"><h1>Учёба и дневник</h1><p>Расписание по дням, неделям и месяцам, оценки и пропуски</p></div>
-    <div class="empty-card"><h3>Загружаем дневник...</h3><p>Получаем данные из Schools.by</p></div>
-  `;
+  const wrap = document.getElementById("diaryScheduleWrap");
+  if (!state.diary || state.tabAnim) {
+    document.getElementById("mainContent").innerHTML = `
+      <div class="tab-intro"><h1>Учёба и дневник</h1><p>Расписание по дням, неделям и месяцам, оценки и пропуски</p></div>
+      <div class="empty-card"><h3>Загружаем дневник...</h3><p>Получаем данные из Schools.by</p></div>
+    `;
+  } else if (wrap) {
+    wrap.style.opacity = "0.5";
+    wrap.style.pointerEvents = "none";
+  }
   const qChild = state.selectedChildId !== null ? `&child_id=${state.selectedChildId}` : "";
   state.diary = await api(`/api/diary?mode=${state.diaryMode}&day_offset=${state.dayOffset}&week_offset=${state.weekOffset}&month_offset=${state.monthOffset}${qChild}`);
   state.expandedWeekIdx = 0;
@@ -2043,42 +2183,68 @@ async function loadDiary() {
 }
 function setDiaryMode(m) {
   state.diaryMode = m;
+  state.swipeDir = 0;
   loadDiary();
 }
 function shiftDay(delta) {
+  state.swipeDir = delta === 0 ? 0 : (delta > 0 ? 1 : -1);
   state.dayOffset = delta === 0 ? 0 : (state.dayOffset + delta);
   loadDiary();
 }
 function shiftWeek(delta) {
+  state.swipeDir = delta === 0 ? 0 : (delta > 0 ? 1 : -1);
   state.weekOffset = delta === 0 ? 0 : (state.weekOffset + delta);
   loadDiary();
 }
 function shiftMonth(delta) {
+  state.swipeDir = delta === 0 ? 0 : (delta > 0 ? 1 : -1);
   state.monthOffset = delta === 0 ? 0 : (state.monthOffset + delta);
   loadDiary();
 }
 function toggleMonthWeek(idx) {
   state.expandedWeekIdx = state.expandedWeekIdx === idx ? -1 : idx;
+  state.tabAnim = false;
+  state.swipeDir = 0;
   renderDiaryTab();
 }
 
-// Свайп влево/вправо в разделе «Учёба» (для Дня, Недели и Месяца)
+// Плавный свайп влево/вправо в разделе «Учёба» (следует за пальцем)
 (function initDiarySwipe() {
   const area = document.getElementById("mainContent");
   if (!area) return;
-  let sx = 0, sy = 0, tracking = false;
+  let sx = 0, sy = 0, tracking = false, swiping = false;
   area.addEventListener("touchstart", e => {
-    if (state.activeTab !== "diary" || e.touches.length !== 1) return;
+    if (state.activeTab !== "diary" || state.diaryMode === "marks" || e.touches.length !== 1) return;
     sx = e.touches[0].clientX;
     sy = e.touches[0].clientY;
     tracking = true;
+    swiping = false;
+  }, { passive: true });
+  area.addEventListener("touchmove", e => {
+    if (!tracking || state.activeTab !== "diary") return;
+    const dx = e.touches[0].clientX - sx;
+    const dy = e.touches[0].clientY - sy;
+    if (!swiping && Math.abs(dx) > 14 && Math.abs(dx) > Math.abs(dy) * 1.25) swiping = true;
+    if (!swiping) return;
+    const wrap = document.getElementById("diaryScheduleWrap");
+    if (wrap) {
+      wrap.style.transition = "none";
+      wrap.style.transform = `translateX(${dx * 0.3}px)`;
+    }
   }, { passive: true });
   area.addEventListener("touchend", e => {
     if (!tracking || state.activeTab !== "diary") return;
     tracking = false;
     const dx = e.changedTouches[0].clientX - sx;
     const dy = e.changedTouches[0].clientY - sy;
-    if (Math.abs(dx) < 55 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
+    const wrap = document.getElementById("diaryScheduleWrap");
+    if (Math.abs(dx) < 55 || Math.abs(dx) < Math.abs(dy) * 1.3) {
+      if (wrap && swiping) {
+        wrap.style.transition = "transform 0.24s cubic-bezier(0.22, 1, 0.36, 1)";
+        wrap.style.transform = "translateX(0)";
+      }
+      return;
+    }
     const step = dx < 0 ? 1 : -1;
     if (state.diaryMode === "day") shiftDay(step);
     else if (state.diaryMode === "week") shiftWeek(step);
@@ -2181,6 +2347,14 @@ function renderDiaryTab() {
     </div>
   `;
 
+  const wrapCls = state.swipeDir > 0
+    ? "anim-slide-next"
+    : (state.swipeDir < 0 ? "anim-slide-prev" : (state.tabAnim ? "anim-tab" : ""));
+  state.swipeDir = 0;
+  state.tabAnim = false;
+
+  html += `<div id="diaryScheduleWrap" class="${wrapCls}">`;
+
   if (isDay) {
     html += `
       <div class="period-nav">
@@ -2192,7 +2366,7 @@ function renderDiaryTab() {
         <button class="nav-arrow" title="Следующий день" onclick="shiftDay(1)">›</button>
       </div>
       <div style="text-align:center;font-size:11.5px;color:var(--muted);margin:-6px 0 10px;">Листайте дни свайпом влево или вправо</div>
-      <div class="card-box">
+      <div class="card-box anim-stagger">
         ${renderLessonsList(d.lessons)}
         ${d.attendance ? `<div style="font-size:12px;color:var(--muted);margin:12px 0 0;padding-top:10px;border-top:1px solid var(--surface-soft);">${esc(d.attendance)}</div>` : ""}
       </div>
@@ -2294,7 +2468,7 @@ function renderDiaryTab() {
       ${d.attendance ? `<div style="font-size:12.5px;color:var(--muted);margin:12px 0 0;padding-top:10px;border-top:1px solid var(--surface-soft);">${esc(d.attendance)}</div>` : ""}
     </div>`;
   }
-  html += statsHtml;
+  html += statsHtml + `</div>`;
   el.innerHTML = html;
 }
 
