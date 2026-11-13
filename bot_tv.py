@@ -89,7 +89,7 @@ def get_main_keyboard(has_multi_pupils: bool = False) -> types.ReplyKeyboardMark
     b4 = types.KeyboardButton("📊 Четвертные оценки")
     b5 = types.KeyboardButton("🍽 Питание и кружки")
     b6 = types.KeyboardButton("💸 Расходы")
-    b7 = types.KeyboardButton("📱 Школьный пульт")
+    b7 = types.KeyboardButton("📱 Dzetva")
     b8 = types.KeyboardButton("🌤 Погода")
 
     markup.add(b1, b2)
@@ -486,7 +486,7 @@ def callback_film(call: types.CallbackQuery):
 
 
 HELP_TEXT = (
-    "🌟 <b>Школьный Дневник и Пульт — Инструкция</b>\n\n"
+    "🌟 <b>Dzetva — Школьный Дневник и Баланс</b>\n\n"
     "📚 <b>ШКОЛЬНЫЙ ДНЕВНИК</b>\n"
     "• <b>📅 Сегодня / 📆 Завтра / 🗓 Вся неделя:</b> расписание с временем звонков, оценки и ДЗ.\n"
     "• <b>📊 Четвертные оценки:</b> четвертные баллы и средний балл.\n"
@@ -494,10 +494,10 @@ HELP_TEXT = (
     "🍽 <b>ПИТАНИЕ, КРУЖКИ И РАСХОДЫ</b>\n"
     "• <b>🍽 Питание и кружки</b> (<code>/meal</code>): баланс столовой, буфета и привязанных секций из ЕРИП.\n"
     "• <b>💸 Расходы</b> (<code>/expenses</code>): статистика трат на ребёнка (неделя / месяц / год).\n"
-    "• <b>📱 Школьный пульт</b> (<code>/app</code>): отдельное мобильное веб-приложение со всеми кружками Минска, графиками расходов и профилями детей.\n\n"
+    "• <b>📱 Dzetva</b> (<code>/app</code>): отдельное мобильное веб-приложение с учёбой, балансами ЕРИП, кружками и аналитикой.\n\n"
     "⚡️ <b>БЫСТРЫЕ КОМАНДЫ:</b>\n"
     "• <code>/0</code> — Сегодня • <code>/1</code> — Завтра • <code>/7</code> — Неделя • <code>/m</code> — Оценки\n"
-    "• <code>/meal</code> — Балансы ЕРИП • <code>/expenses</code> — Расходы • <code>/app</code> — Открыть Пульт\n"
+    "• <code>/meal</code> — Балансы ЕРИП • <code>/expenses</code> — Расходы • <code>/app</code> — Открыть Dzetva\n"
     "• <code>/bind</code> — Привязать семейный чат"
 )
 
@@ -509,12 +509,12 @@ def handle_help(message: types.Message):
 
 
 @bot.message_handler(commands=["app"])
-@bot.message_handler(func=lambda m: m.text and ("школьный пульт" in m.text.lower() or "📱" in m.text))
+@bot.message_handler(func=lambda m: m.text and ("dzetva" in m.text.lower() or "школьный пульт" in m.text.lower() or "📱" in m.text))
 def handle_open_app(message: types.Message):
     app_url = os.environ.get("WEBAPP_PUBLIC_URL", "http://192.168.1.35:8080")
     bot.send_message(
         message.chat.id,
-        f"📱 <b>Школьный пульт (приложение)</b>\n\n"
+        f"📱 <b>Dzetva (веб-приложение)</b>\n\n"
         f"Откройте в браузере телефона:\n"
         f"👉 {app_url}\n\n"
         f"💡 <i>Чтобы добавить как отдельное приложение: нажмите «Поделиться / Меню браузера» → «На экран Домой».</i>",
@@ -547,10 +547,10 @@ def handle_expenses(message: types.Message):
             if v > 0:
                 lines.append(f"  • {lbl}: {v:.2f} BYN".replace(".", ","))
     if not children:
-        lines.append("Профили детей пока пустые. Откройте 📱 Школьный пульт!")
+        lines.append("Профили детей пока пустые. Откройте 📱 Dzetva!")
     else:
         lines.append(f"\n💰 <b>Итого по семье: {total_all:.2f} BYN</b>".replace(".", ","))
-    lines.append("\n<i>Подробные графики (неделя / месяц / четверть / год) — в 📱 Школьном пульте.</i>")
+    lines.append("\n<i>Подробные графики (неделя / месяц / четверть / год) — в приложении 📱 Dzetva.</i>")
     bot.send_message(message.chat.id, "\n".join(lines))
 
 @bot.message_handler(commands=["settings", "setup"])
@@ -1174,7 +1174,7 @@ def main():
     t = threading.Thread(target=notifier_loop, daemon=True)
     t.start()
 
-    # Запуск PWA веб-приложения «Школьный пульт»
+    # Запуск PWA веб-приложения «Dzetva»
     w = threading.Thread(target=webapp_server.run_webapp_in_thread, kwargs={"host": "0.0.0.0", "port": webapp_server.DEFAULT_PORT}, daemon=True)
     w.start()
     

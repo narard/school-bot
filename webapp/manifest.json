@@ -1,11 +1,11 @@
 {
-  "name": "Школьный пульт",
-  "short_name": "Школьный пульт",
-  "description": "Дневник, питание ЕРИП, кружки и расходы по школе на каждого ребёнка",
+  "name": "Dzetva",
+  "short_name": "Dzetva",
+  "description": "Учёба, расписание, питание ЕРИП, кружки и аналитика расходов по школе",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f4f6fb",
-  "theme_color": "#2563eb",
+  "background_color": "#F0F4F9",
+  "theme_color": "#1A73E8",
   "icons": [
     {
       "src": "/icon.svg",
