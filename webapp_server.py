@@ -311,6 +311,37 @@ async def api_delete_club(request: web.Request) -> web.Response:
     return web.json_response({"ok": True})
 
 
+async def api_update_club(request: web.Request) -> web.Response:
+    tg_id = _resolve_tg_id(request)
+    club_id = int(request.match_info["club_id"])
+    existing = db.get_club_by_id(tg_id, club_id)
+    if not existing:
+        return web.json_response({"ok": False, "error": "Кружок не найден"}, status=404)
+
+    data = await request.json()
+    org_name = (data.get("org_name") or "").strip() or existing["org_name"]
+    account_number = (data.get("account_number") or "").strip() or existing["account_number"]
+    raw_amt = data.get("monthly_amount")
+    monthly_amount = float(str(raw_amt).replace(",", ".")) if raw_amt not in (None, "", 0, "0") else None
+    raw_due = data.get("due_day")
+    due_day = int(raw_due) if raw_due not in (None, "", 0, "0") else None
+    raw_thr = data.get("alert_threshold")
+    alert_threshold = float(str(raw_thr).replace(",", ".")) if raw_thr not in (None, "") else existing.get("alert_threshold", 5.0)
+
+    updated = db.update_child_club(
+        tg_id=tg_id,
+        club_id=club_id,
+        org_name=org_name,
+        account_number=account_number,
+        monthly_amount=monthly_amount,
+        due_day=due_day,
+        alert_threshold=alert_threshold,
+    )
+    if account_number != existing["account_number"] and updated:
+        updated = await asyncio.to_thread(_refresh_single_club, tg_id, updated)
+    return web.json_response({"ok": True, "club": updated})
+
+
 async def api_get_expenses(request: web.Request) -> web.Response:
     tg_id = _resolve_tg_id(request)
     q_cid = request.query.get("child_id")
@@ -450,7 +481,7 @@ def _enrich_days(days: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 
 def _fetch_diary_sync(
-    tg_id: int, child_id: int, mode: str, week_offset: int = 0, month_offset: int = 0
+    tg_id: int, child_id: int, mode: str, week_offset: int = 0, month_offset: int = 0, day_offset: int = 0
 ) -> Dict[str, Any]:
     children = db.ensure_children_synced(tg_id)
     child = next((c for c in children if c["id"] == child_id), None)
@@ -582,8 +613,9 @@ def _fetch_diary_sync(
             "quarter_behavior": q_data.get("behavior") or "",
         }
 
-    # Режим 'today' или 'tomorrow'
-    target_dt = today if mode == "today" else today + timedelta(days=1)
+    # Режим 'day' / 'today' / 'tomorrow' (поддержка любого сдвига day_offset свайпом)
+    effective_offset = 1 if (mode == "tomorrow" and day_offset == 0) else day_offset
+    target_dt = today + timedelta(days=effective_offset)
     wd_name = RUSSIAN_WEEKDAYS[target_dt.weekday()]
     target_monday = target_dt - timedelta(days=target_dt.weekday())
     with ThreadPoolExecutor(max_workers=2) as pool:
@@ -596,11 +628,14 @@ def _fetch_diary_sync(
     target_day = next((d for d in stats["days"] if wd_name in d.get("title", "").lower()), None)
     lessons = target_day["lessons"] if target_day else []
     att = _parse_attendance(diary.get("attendance", ""))
+    fallback_title = f"{wd_name.capitalize()}, {target_dt.day} {RUSSIAN_MONTHS[target_dt.month].lower()}"
     return {
         "ok": True,
         "mode": mode,
+        "day_offset": effective_offset,
+        "target_date": target_dt.strftime("%d.%m.%Y"),
         "child_name": child["name"],
-        "day_title": target_day.get("title", wd_name.capitalize()) if target_day else wd_name.capitalize(),
+        "day_title": target_day.get("title", fallback_title) if target_day else fallback_title,
         "lessons": lessons,
         "attendance": att["text"],
         "attendance_info": att,
@@ -612,7 +647,7 @@ def _fetch_diary_sync(
 async def api_get_diary(request: web.Request) -> web.Response:
     tg_id = _resolve_tg_id(request)
     q_cid = request.query.get("child_id")
-    mode = request.query.get("mode", "today")
+    mode = request.query.get("mode", "day")
     try:
         week_offset = max(-12, min(12, int(request.query.get("week_offset", "0"))))
     except ValueError:
@@ -621,6 +656,10 @@ async def api_get_diary(request: web.Request) -> web.Response:
         month_offset = max(-6, min(6, int(request.query.get("month_offset", "0"))))
     except ValueError:
         month_offset = 0
+    try:
+        day_offset = max(-30, min(30, int(request.query.get("day_offset", "0"))))
+    except ValueError:
+        day_offset = 0
 
     if not q_cid or not q_cid.isdigit():
         children = db.ensure_children_synced(tg_id)
@@ -630,7 +669,7 @@ async def api_get_diary(request: web.Request) -> web.Response:
         cid = linked["id"]
     else:
         cid = int(q_cid)
-    res = await asyncio.to_thread(_fetch_diary_sync, tg_id, cid, mode, week_offset, month_offset)
+    res = await asyncio.to_thread(_fetch_diary_sync, tg_id, cid, mode, week_offset, month_offset, day_offset)
     return web.json_response(res)
 
 
@@ -651,6 +690,7 @@ def create_app() -> web.Application:
     app.router.add_post("/api/clubs/refresh_all", api_refresh_all_clubs)
     app.router.add_post("/api/clubs/{club_id}/refresh", api_refresh_club)
     app.router.add_post("/api/clubs/{club_id}/confirm_pay", api_confirm_club_payment)
+    app.router.add_post("/api/clubs/{club_id}/update", api_update_club)
     app.router.add_delete("/api/clubs/{club_id}", api_delete_club)
     app.router.add_get("/api/expenses", api_get_expenses)
     app.router.add_post("/api/expenses", api_add_expense)

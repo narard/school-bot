@@ -171,16 +171,45 @@
     @keyframes spin { to { transform: rotate(360deg); } }
 
     /* Переключатель детей */
-    .children-bar {
+    .children-bar-wrap {
       max-width: 560px;
       margin: 0 auto;
       padding: 4px 16px 12px;
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .children-bar {
+      flex: 1;
+      min-width: 0;
       display: flex;
       gap: 8px;
       overflow-x: auto;
+      scroll-behavior: smooth;
       scrollbar-width: none;
+      cursor: grab;
+      user-select: none;
+      -webkit-overflow-scrolling: touch;
     }
+    .children-bar:active { cursor: grabbing; }
     .children-bar::-webkit-scrollbar { display: none; }
+    .scroll-chip-btn {
+      width: 30px;
+      height: 30px;
+      border-radius: 999px;
+      border: none;
+      background: var(--surface);
+      color: var(--text-sec);
+      box-shadow: var(--shadow-card);
+      font-size: 16px;
+      font-weight: 700;
+      display: none;
+      place-items: center;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .scroll-chip-btn.show { display: grid; }
 
     .child-pill {
       display: inline-flex;
@@ -974,16 +1003,28 @@
       </button>
     </div>
   </div>
-  <div class="children-bar" id="childrenTabs"></div>
+  <div class="children-bar-wrap">
+    <button class="scroll-chip-btn" id="childScrollLeft" type="button" onclick="scrollChildrenBar(-180)" aria-label="Влево">‹</button>
+    <div class="children-bar" id="childrenTabs"></div>
+    <button class="scroll-chip-btn" id="childScrollRight" type="button" onclick="scrollChildrenBar(180)" aria-label="Вправо">›</button>
+  </div>
 </header>
 
 <main class="container" id="mainContent">
   <div class="empty-card"><h3>Загружаем данные...</h3><p>Проверяем профили детей и балансы ЕРИП</p></div>
 </main>
 
-<!-- 3 простые и понятные вкладки -->
+<!-- 3 простые и понятные вкладки: Учёба · Баланс · Аналитика -->
 <nav class="bottom-nav">
   <div class="bottom-nav-inner">
+    <button class="nav-item" data-tab="diary" onclick="switchTab('diary')">
+      <span class="nav-pill">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>
+        </svg>
+      </span>
+      <span>Учёба</span>
+    </button>
     <button class="nav-item active" data-tab="wallet" onclick="switchTab('wallet')">
       <span class="nav-pill">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -999,15 +1040,7 @@
           <path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/>
         </svg>
       </span>
-      <span>Траты</span>
-    </button>
-    <button class="nav-item" data-tab="diary" onclick="switchTab('diary')">
-      <span class="nav-pill">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>
-        </svg>
-      </span>
-      <span>Учёба</span>
+      <span>Аналитика</span>
     </button>
   </div>
 </nav>
@@ -1036,9 +1069,9 @@
     <div class="sec-title" style="margin-bottom:8px;">Что здесь где (кратко)</div>
     <div class="step-box" style="display:block;">
       <div style="font-size:13px;line-height:1.5;color:var(--text-sec);">
-        <p><b>1. Баланс</b> — остатки столовой, буфета и ваши кружки. Кнопка «Как оплатить» просто показывает реквизиты, деньги не списывает.</p>
-        <p style="margin-top:6px;"><b>2. Траты</b> — автоматически считает, сколько ушло на питание и кружки за месяц, четверть и год.</p>
-        <p style="margin-top:6px;"><b>3. Учёба</b> — уроки на день, неделю или месяц, средний балл, пропуски и оценки из Schools.by.</p>
+        <p><b>1. Учёба</b> — уроки на день (свайпом), неделю или месяц, средний балл, пропуски и оценки из Schools.by.</p>
+        <p style="margin-top:6px;"><b>2. Баланс</b> — остатки столовой, буфета и ваши кружки. Кнопка «Как оплатить» просто показывает реквизиты, деньги не списывает.</p>
+        <p style="margin-top:6px;"><b>3. Аналитика</b> — автоматически считает, сколько ушло на питание и кружки за неделю, месяц, четверть и год.</p>
       </div>
     </div>
   </div>
@@ -1199,6 +1232,45 @@
   </div>
 </div>
 
+<!-- Шторка: Редактировать кружок / секцию -->
+<div class="modal-backdrop" id="modalEditClub">
+  <div class="modal">
+    <div class="sheet-handle"></div>
+    <div class="modal-head">
+      <div class="modal-title">Настроить кружок</div>
+      <button class="btn-close" onclick="closeModal('modalEditClub')">✕</button>
+    </div>
+    <input type="hidden" id="editClubId" />
+    <div class="field">
+      <label>Название (как удобно вам)</label>
+      <input class="input" id="editClubName" placeholder="Например: Робототехника КодЭндБот" />
+    </div>
+    <div class="field">
+      <label>Номер договора / лицевого счёта</label>
+      <input class="input" id="editClubAcc" />
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;" id="editClubCustomFields">
+      <div class="field">
+        <label>Стоимость (BYN/мес)</label>
+        <input class="input" id="editClubAmt" type="number" step="0.01" placeholder="160.00" />
+      </div>
+      <div class="field">
+        <label>Платить до числа</label>
+        <input class="input" id="editClubDue" type="number" min="1" max="31" placeholder="10" />
+      </div>
+    </div>
+    <div class="field" id="editClubThresholdWrap" style="display:none;">
+      <label>Напоминать, если баланс меньше (BYN)</label>
+      <input class="input" id="editClubThreshold" type="number" step="0.5" placeholder="5.0" />
+    </div>
+    <div class="form-err" id="editClubErr"></div>
+    <button class="btn btn-primary" onclick="saveClubEdit()">Сохранить изменения</button>
+    <div id="editClubDelWrap" style="margin-top:10px;">
+      <button class="btn btn-danger-soft" id="editClubDelBtn">Убрать кружок из списка</button>
+    </div>
+  </div>
+</div>
+
 <!-- Шторка: Записать покупку -->
 <div class="modal-backdrop" id="modalExpense">
   <div class="modal">
@@ -1256,8 +1328,8 @@ const AVATAR_COLORS = ["#1A73E8", "#34A853", "#FBBC04", "#EA4335", "#9334E6"];
 const state = {
   children: [], clubs: [], districts: [],
   selectedChildId: null, activeTab: "wallet",
-  expPeriod: "month", diaryMode: "today",
-  weekOffset: 0, monthOffset: 0, expandedWeekIdx: 0,
+  expPeriod: "month", diaryMode: "day",
+  dayOffset: 0, weekOffset: 0, monthOffset: 0, expandedWeekIdx: 0,
   expenses: null, diary: null,
   selectedOrg: null, selectedService: null, inspectServices: [], searchItems: [],
   payClub: null,
@@ -1336,7 +1408,55 @@ function renderTopTabs() {
     `;
   });
   wrap.innerHTML = html;
+  updateChildrenScrollArrows();
 }
+
+function scrollChildrenBar(dx) {
+  const bar = document.getElementById("childrenTabs");
+  if (!bar) return;
+  bar.scrollBy({ left: dx, behavior: "smooth" });
+  setTimeout(updateChildrenScrollArrows, 280);
+}
+
+function updateChildrenScrollArrows() {
+  const bar = document.getElementById("childrenTabs");
+  const l = document.getElementById("childScrollLeft");
+  const r = document.getElementById("childScrollRight");
+  if (!bar || !l || !r) return;
+  const maxScroll = bar.scrollWidth - bar.clientWidth;
+  l.classList.toggle("show", maxScroll > 6 && bar.scrollLeft > 4);
+  r.classList.toggle("show", maxScroll > 6 && bar.scrollLeft < maxScroll - 4);
+}
+
+// Листание верхнего блока детей колёсиком, перетаскиванием мышкой и тачем
+(function initChildrenBarScroll() {
+  const bar = document.getElementById("childrenTabs");
+  if (!bar) return;
+  bar.addEventListener("scroll", updateChildrenScrollArrows);
+  window.addEventListener("resize", updateChildrenScrollArrows);
+  bar.addEventListener("wheel", e => {
+    if (bar.scrollWidth > bar.clientWidth && Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+      e.preventDefault();
+      bar.scrollLeft += e.deltaY;
+    }
+  }, { passive: false });
+
+  let isDown = false, startX = 0, scrollStart = 0, moved = false;
+  bar.addEventListener("mousedown", e => {
+    isDown = true; moved = false;
+    startX = e.pageX; scrollStart = bar.scrollLeft;
+  });
+  window.addEventListener("mousemove", e => {
+    if (!isDown) return;
+    const dx = e.pageX - startX;
+    if (Math.abs(dx) > 5) moved = true;
+    bar.scrollLeft = scrollStart - dx;
+  });
+  window.addEventListener("mouseup", () => { isDown = false; });
+  bar.addEventListener("click", e => {
+    if (moved) { e.preventDefault(); e.stopPropagation(); moved = false; }
+  }, true);
+})();
 
 function selectChild(cid) {
   state.selectedChildId = cid;
@@ -1417,6 +1537,11 @@ function renderClubCard(club) {
   const doneBtn = (isCustom && !club.paid_this_month)
     ? `<button class="btn-pill btn-ok-pill" onclick="openPayModal(${club.id}, true)">✓ Я оплатил</button>`
     : "";
+  const editBtn = `<button class="btn-more" title="Настроить" onclick="openEditClubModal(${club.id})">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+    </svg>
+  </button>`;
 
   return `
     <div class="item-card">
@@ -1435,6 +1560,7 @@ function renderClubCard(club) {
         <div class="card-btns">
           <button class="btn-pill btn-tonal" onclick="openPayModal(${club.id}, false)">Как оплатить</button>
           ${doneBtn}
+          ${editBtn}
         </div>
       </div>
     </div>
@@ -1553,7 +1679,7 @@ function renderExpensesTab() {
   const total = ex.total || 0;
   let html = `
     <div class="tab-intro">
-      <h1>Школьные траты</h1>
+      <h1>Аналитика трат</h1>
       <p>Сколько ушло на питание, кружки и покупки к школе</p>
     </div>
 
@@ -1593,16 +1719,20 @@ function renderExpensesTab() {
 
 async function loadDiary() {
   document.getElementById("mainContent").innerHTML = `
-    <div class="tab-intro"><h1>Учёба и дневник</h1><p>Расписание на дни, недели и месяц, оценки и пропуски</p></div>
+    <div class="tab-intro"><h1>Учёба и дневник</h1><p>Расписание по дням, неделям и месяцам, оценки и пропуски</p></div>
     <div class="empty-card"><h3>Загружаем дневник...</h3><p>Получаем данные из Schools.by</p></div>
   `;
   const qChild = state.selectedChildId !== null ? `&child_id=${state.selectedChildId}` : "";
-  state.diary = await api(`/api/diary?mode=${state.diaryMode}&week_offset=${state.weekOffset}&month_offset=${state.monthOffset}${qChild}`);
+  state.diary = await api(`/api/diary?mode=${state.diaryMode}&day_offset=${state.dayOffset}&week_offset=${state.weekOffset}&month_offset=${state.monthOffset}${qChild}`);
   state.expandedWeekIdx = 0;
   renderDiaryTab();
 }
 function setDiaryMode(m) {
   state.diaryMode = m;
+  loadDiary();
+}
+function shiftDay(delta) {
+  state.dayOffset = delta === 0 ? 0 : (state.dayOffset + delta);
   loadDiary();
 }
 function shiftWeek(delta) {
@@ -1617,6 +1747,30 @@ function toggleMonthWeek(idx) {
   state.expandedWeekIdx = state.expandedWeekIdx === idx ? -1 : idx;
   renderDiaryTab();
 }
+
+// Свайп влево/вправо в разделе «Учёба» (для Дня, Недели и Месяца)
+(function initDiarySwipe() {
+  const area = document.getElementById("mainContent");
+  if (!area) return;
+  let sx = 0, sy = 0, tracking = false;
+  area.addEventListener("touchstart", e => {
+    if (state.activeTab !== "diary" || e.touches.length !== 1) return;
+    sx = e.touches[0].clientX;
+    sy = e.touches[0].clientY;
+    tracking = true;
+  }, { passive: true });
+  area.addEventListener("touchend", e => {
+    if (!tracking || state.activeTab !== "diary") return;
+    tracking = false;
+    const dx = e.changedTouches[0].clientX - sx;
+    const dy = e.changedTouches[0].clientY - sy;
+    if (Math.abs(dx) < 55 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
+    const step = dx < 0 ? 1 : -1;
+    if (state.diaryMode === "day") shiftDay(step);
+    else if (state.diaryMode === "week") shiftWeek(step);
+    else if (state.diaryMode === "month") shiftMonth(step);
+  }, { passive: true });
+})();
 
 function markBadgeClass(m) {
   const num = parseInt(String(m || "").replace(/\D/g, ""));
@@ -1644,7 +1798,7 @@ function renderLessonsList(lessons) {
 function renderDiaryTab() {
   const el = document.getElementById("mainContent");
   const d = state.diary || {};
-  const isDays = state.diaryMode === "today" || state.diaryMode === "tomorrow";
+  const isDay = state.diaryMode === "day" || state.diaryMode === "today" || state.diaryMode === "tomorrow";
 
   let html = `
     <div class="tab-intro">
@@ -1653,7 +1807,7 @@ function renderDiaryTab() {
     </div>
 
     <div class="seg-bar">
-      <button class="seg-btn ${isDays ? "active" : ""}" onclick="setDiaryMode('today')">Дни</button>
+      <button class="seg-btn ${isDay ? "active" : ""}" onclick="setDiaryMode('day')">День</button>
       <button class="seg-btn ${state.diaryMode === "week" ? "active" : ""}" onclick="setDiaryMode('week')">Неделя</button>
       <button class="seg-btn ${state.diaryMode === "month" ? "active" : ""}" onclick="setDiaryMode('month')">Месяц</button>
       <button class="seg-btn ${state.diaryMode === "marks" ? "active" : ""}" onclick="setDiaryMode('marks')">Итоги</button>
@@ -1682,7 +1836,7 @@ function renderDiaryTab() {
 
   let thirdLabel = "Уроков";
   let thirdVal = "—";
-  if (isDays) {
+  if (isDay) {
     thirdLabel = "Уроков в день";
     thirdVal = `${(d.lessons || []).length}`;
   } else if (state.diaryMode === "week") {
@@ -1713,18 +1867,19 @@ function renderDiaryTab() {
     </div>
   `;
 
-  if (isDays) {
+  if (isDay) {
     html += `
-      <div class="seg-bar" style="margin-bottom:12px;">
-        <button class="seg-btn ${state.diaryMode === "today" ? "active" : ""}" onclick="setDiaryMode('today')">Сегодня</button>
-        <button class="seg-btn ${state.diaryMode === "tomorrow" ? "active" : ""}" onclick="setDiaryMode('tomorrow')">Завтра</button>
-      </div>
-      <div class="card-box">
-        <div class="day-head">
-          <span class="day-head-title">${esc(d.day_title)}</span>
-          <span class="day-count-pill">${(d.lessons || []).length} ур.</span>
+      <div class="period-nav">
+        <button class="nav-arrow" title="Предыдущий день" onclick="shiftDay(-1)">‹</button>
+        <div class="period-label">
+          ${esc(d.day_title)}
+          ${state.dayOffset !== 0 ? `<button type="button" style="margin-left:8px;border:none;background:var(--surface-tonal);color:var(--info-text);padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;" onclick="shiftDay(0)">Сегодня</button>` : ""}
         </div>
-        ${d.attendance ? `<div style="font-size:12px;color:var(--muted);margin:-4px 0 12px;">${esc(d.attendance)}</div>` : ""}
+        <button class="nav-arrow" title="Следующий день" onclick="shiftDay(1)">›</button>
+      </div>
+      <div style="text-align:center;font-size:11.5px;color:var(--muted);margin:-6px 0 10px;">Листайте дни свайпом влево или вправо</div>
+      <div class="card-box">
+        ${d.attendance ? `<div style="font-size:12px;color:var(--muted);margin:0 0 12px;">${esc(d.attendance)}</div>` : ""}
         ${renderLessonsList(d.lessons)}
       </div>
     `;
@@ -1747,7 +1902,6 @@ function renderDiaryTab() {
         <div class="card-box">
           <div class="day-head">
             <span class="day-head-title">${esc(day.title)}</span>
-            <span class="day-count-pill">${day.lesson_count || 0} ур.</span>
           </div>
           ${renderLessonsList(day.lessons)}
         </div>
@@ -1798,7 +1952,7 @@ function renderDiaryTab() {
               <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--surface-soft);">
                 ${(wk.days && wk.days.length) ? wk.days.map(day => `
                   <div style="margin-bottom:12px;">
-                    <div style="font-weight:700;font-size:13.5px;margin-bottom:6px;color:var(--primary);">${esc(day.title)} (${day.lesson_count} ур.)</div>
+                    <div style="font-weight:700;font-size:13.5px;margin-bottom:6px;color:var(--primary);">${esc(day.title)}</div>
                     ${renderLessonsList(day.lessons)}
                   </div>
                 `).join("") : `<div style="color:var(--muted);font-size:13px;">Уроков на этой неделе нет</div>`}
@@ -1838,6 +1992,50 @@ async function refreshAllErip() {
   await loadBootstrap();
   btn.classList.remove("spinning");
   showToast("Готово, балансы обновлены");
+}
+
+function openEditClubModal(clubId) {
+  const club = state.clubs.find(c => c.id === clubId);
+  if (!club) return;
+  showFormErr("editClubErr", "");
+  const isCustom = !["canteen", "buffet", "school_club"].includes(club.kind);
+
+  document.getElementById("editClubId").value = club.id;
+  document.getElementById("editClubName").value = club.org_name || "";
+  document.getElementById("editClubAcc").value = club.account_number || "";
+  document.getElementById("editClubAmt").value = club.monthly_amount || "";
+  document.getElementById("editClubDue").value = club.due_day || "";
+  document.getElementById("editClubThreshold").value = club.alert_threshold !== null && club.alert_threshold !== undefined ? club.alert_threshold : 5;
+
+  document.getElementById("editClubCustomFields").style.display = isCustom ? "grid" : "none";
+  document.getElementById("editClubThresholdWrap").style.display = ["canteen", "buffet"].includes(club.kind) ? "block" : "none";
+  document.getElementById("editClubDelWrap").style.display = isCustom ? "block" : "none";
+  document.getElementById("editClubDelBtn").onclick = () => {
+    closeModal("modalEditClub");
+    askDeleteClub(club.id, club.org_name);
+  };
+  openModal("modalEditClub");
+}
+
+async function saveClubEdit() {
+  showFormErr("editClubErr", "");
+  const clubId = parseInt(document.getElementById("editClubId").value);
+  const org_name = document.getElementById("editClubName").value.trim();
+  const account_number = document.getElementById("editClubAcc").value.trim();
+  const monthly_amount = document.getElementById("editClubAmt").value;
+  const due_day = document.getElementById("editClubDue").value;
+  const alert_threshold = document.getElementById("editClubThreshold").value;
+  if (!org_name || !account_number) return showFormErr("editClubErr", "Заполните название и номер счёта");
+
+  const res = await api(`/api/clubs/${clubId}/update`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ org_name, account_number, monthly_amount, due_day, alert_threshold }),
+  });
+  if (!res.ok) return showFormErr("editClubErr", res.error || "Ошибка сохранения");
+  closeModal("modalEditClub");
+  showToast("Изменения сохранены");
+  await loadBootstrap();
 }
 
 function openSettingsModal() {

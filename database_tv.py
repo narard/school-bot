@@ -560,6 +560,37 @@ def delete_child_club(tg_id: int, club_id: int):
         conn.commit()
 
 
+def update_child_club(
+    tg_id: int,
+    club_id: int,
+    org_name: Optional[str] = None,
+    account_number: Optional[str] = None,
+    monthly_amount: Optional[float] = None,
+    due_day: Optional[int] = None,
+    alert_threshold: Optional[float] = None,
+) -> Optional[Dict[str, Any]]:
+    with get_db() as conn:
+        existing = conn.execute(
+            "SELECT * FROM child_clubs WHERE tg_id = ? AND id = ?",
+            (tg_id, club_id),
+        ).fetchone()
+        if not existing:
+            return None
+        new_org = org_name.strip() if org_name and org_name.strip() else existing["org_name"]
+        new_acc = account_number.strip() if account_number and account_number.strip() else existing["account_number"]
+        conn.execute(
+            """
+            UPDATE child_clubs
+            SET org_name = ?, account_number = ?, monthly_amount = ?, due_day = ?, alert_threshold = ?
+            WHERE tg_id = ? AND id = ?
+            """,
+            (new_org, new_acc, monthly_amount, due_day, alert_threshold if alert_threshold is not None else existing["alert_threshold"], tg_id, club_id),
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM child_clubs WHERE id = ?", (club_id,)).fetchone()
+        return dict(row) if row else None
+
+
 def update_club_erip_state(
     tg_id: int,
     club_id: int,
