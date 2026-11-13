@@ -615,6 +615,47 @@
       gap: 10px;
       margin-bottom: 14px;
     }
+    .urgent-info-banner {
+      background: var(--info-bg);
+      color: var(--info-text);
+      border-radius: var(--radius-lg);
+      padding: 14px 16px;
+      font-size: 13.5px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+      line-height: 1.35;
+    }
+    .inline-erip-box {
+      padding: 10px 0 6px;
+    }
+    .inline-erip-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    .inline-erip-sub {
+      font-size: 12.5px;
+      color: var(--muted);
+      line-height: 1.4;
+      margin-bottom: 10px;
+    }
+    .inline-erip-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 8px;
+    }
+    .inline-erip-err {
+      color: var(--bad-text);
+      font-size: 12px;
+      font-weight: 500;
+      margin-top: 6px;
+      display: none;
+    }
     .urgent-row {
       display: flex;
       align-items: center;
@@ -1513,6 +1554,11 @@ async function loadBootstrap() {
   state.clubs = data.clubs || [];
   state.districts = data.districts || [];
   state.expenses = data.month_expenses;
+  state.children.forEach(c => {
+    if (!(c.id in state.expandedChildren) && !state.clubs.some(cl => cl.child_id === c.id)) {
+      state.expandedChildren[c.id] = true;
+    }
+  });
   if (state.selectedChildId && !state.children.some(c => c.id === state.selectedChildId)) state.selectedChildId = null;
   renderTopTabs();
   if (state.activeTab === "diary") await loadDiary();
@@ -1681,6 +1727,72 @@ function toggleChildGroup(cid) {
   renderCurrentTab();
 }
 
+function renderInlineEripBox(ch) {
+  const distOpts = (state.districts && state.districts.length ? state.districts : ["Фрунзенский район"])
+    .map(d => `<option value="${esc(d)}" ${d === (ch.district || "Фрунзенский район") ? "selected" : ""}>${esc(d)}</option>`)
+    .join("");
+  return `
+    <div class="inline-erip-box" onclick="event.stopPropagation()">
+      <div class="inline-erip-title">Введите учётный номер ученика</div>
+      <div class="inline-erip-sub">10 цифр из школы или дневника — сразу подтянем столовую, буфет и школьные кружки из ЕРИП.</div>
+      <select id="inlineDist-${ch.id}" aria-label="Район школы">${distOpts}</select>
+      <div class="inline-erip-row">
+        <input id="inlineAcc-${ch.id}" class="input" style="flex:1;min-width:0;" type="text" inputmode="numeric" maxlength="12" placeholder="Например: 1210332104" value="${esc(ch.erip_account || "")}" onkeydown="if(event.key==='Enter'){event.preventDefault();attachChildAccountInline(${ch.id});}" />
+        <button id="inlineAccBtn-${ch.id}" class="btn btn-primary" style="width:auto;height:44px;padding:0 18px;flex-shrink:0;" type="button" onclick="attachChildAccountInline(${ch.id})">Подключить</button>
+      </div>
+      <div id="inlineAccErr-${ch.id}" class="inline-erip-err"></div>
+    </div>
+  `;
+}
+
+async function attachChildAccountInline(childId) {
+  const ch = state.children.find(c => c.id === childId);
+  const inp = document.getElementById(`inlineAcc-${childId}`);
+  const sel = document.getElementById(`inlineDist-${childId}`);
+  const btn = document.getElementById(`inlineAccBtn-${childId}`);
+  const errEl = document.getElementById(`inlineAccErr-${childId}`);
+  if (!ch || !inp || !errEl) return;
+
+  const acc = inp.value.replace(/\s+/g, "").trim();
+  errEl.style.display = "none";
+  errEl.textContent = "";
+
+  if (!/^\d{6,14}$/.test(acc)) {
+    errEl.textContent = "Введите 10-значный учётный номер (только цифры)";
+    errEl.style.display = "block";
+    inp.focus();
+    return;
+  }
+
+  const prevLabel = btn ? btn.textContent : "";
+  if (btn) { btn.disabled = true; btn.textContent = "Загрузка…"; }
+  try {
+    const res = await api("/api/children", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: ch.id,
+        name: ch.name,
+        district: sel ? sel.value : (ch.district || "Фрунзенский район"),
+        erip_account: acc,
+      }),
+    });
+    if (!res.ok) {
+      errEl.textContent = res.error || "Не удалось подключить счёт";
+      errEl.style.display = "block";
+      return;
+    }
+    state.expandedChildren[ch.id] = true;
+    await loadBootstrap();
+    showToast("Учётный номер подключён");
+  } catch (e) {
+    errEl.textContent = "Ошибка соединения, попробуйте ещё раз";
+    errEl.style.display = "block";
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = prevLabel || "Подключить"; }
+  }
+}
+
 function renderCompactAccRow(club) {
   const isCustom = !["canteen", "buffet", "school_club"].includes(club.kind);
   const amt = club.last_balance !== null && club.last_balance !== undefined
@@ -1752,6 +1864,13 @@ function renderCurrentTab() {
           }).join("")}
         </div>
       `;
+    } else if (clubs.length === 0) {
+      html += `
+        <div class="urgent-info-banner">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="flex-shrink:0;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          <span>Чтобы видеть балансы питания и кружков — введите учётный номер ученика ниже</span>
+        </div>
+      `;
     } else {
       html += `
         <div class="urgent-ok-banner">
@@ -1811,7 +1930,7 @@ function renderCurrentTab() {
                 ${(() => {
                   const sections = chClubs.filter(c => !["canteen", "buffet"].includes(c.kind));
                   if (!chClubs.length) {
-                    return `<div style="padding:10px 0;font-size:13px;color:var(--muted);">Добавьте 10-значный счёт ученика в настройках или привяжите кружок ниже.</div>`;
+                    return renderInlineEripBox(ch);
                   }
                   let inner = "";
                   if (meals.length) {
