@@ -672,6 +672,9 @@
       padding: 6px 16px 12px;
       background: color-mix(in srgb, var(--c-soft, transparent) 22%, var(--surface));
     }
+    html[data-theme="google-dark"] .child-group-body {
+      background: color-mix(in srgb, var(--c-accent, transparent) 10%, var(--surface));
+    }
     .acc-row {
       display: flex;
       align-items: center;
@@ -1096,6 +1099,11 @@
       <span class="brand-name">Школьный пульт</span>
     </div>
     <div class="top-actions">
+      <button class="icon-circle-btn" id="btnThemeToggle" title="Переключить светлую / тёмную тему" onclick="toggleGoogleTheme()">
+        <svg id="themeToggleIcon" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+        </svg>
+      </button>
       <button class="icon-circle-btn" id="btnRefreshAll" title="Проверить балансы в ЕРИП" onclick="refreshAllErip()">
         <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/>
@@ -1419,10 +1427,20 @@ function applyGoogleTheme(t) {
     bl.classList.toggle("active", theme === "google");
     bd.classList.toggle("active", theme === "google-dark");
   }
+  const icon = document.getElementById("themeToggleIcon");
+  if (icon) {
+    icon.innerHTML = theme === "google-dark"
+      ? `<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>`
+      : `<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>`;
+  }
 }
 function setGoogleTheme(t) {
   applyGoogleTheme(t);
   showToast(t === "google-dark" ? "Включена тёмная тема" : "Включена светлая тема");
+}
+function toggleGoogleTheme() {
+  const cur = document.documentElement.getAttribute("data-theme");
+  setGoogleTheme(cur === "google-dark" ? "google" : "google-dark");
 }
 (function initTheme() {
   const params = new URLSearchParams(location.search);
