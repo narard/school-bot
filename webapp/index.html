@@ -2295,7 +2295,11 @@ function renderDiaryTab() {
   `;
 
   if (!d.ok) {
-    html += `<div class="empty-card"><h3>Нет данных дневника</h3><p>${esc(d.error || "Проверьте привязку Schools.by в настройках или в Telegram-боте")}</p></div>`;
+    if (d.no_schools_by) {
+      html += `<div class="empty-card"><h3>Дневник пока не подключён</h3><p>В 1–2 классах электронный дневник в Schools.by часто не заводят (безотметочное обучение). Все счета питания и кружков этого ребёнка доступны во вкладке «Баланс».</p><button class="btn btn-soft" onclick="switchTab('wallet')">Перейти к балансу</button></div>`;
+    } else {
+      html += `<div class="empty-card"><h3>Нет данных дневника</h3><p>${esc(d.error || "Проверьте привязку Schools.by в настройках или в Telegram-боте")}</p></div>`;
+    }
     el.innerHTML = html;
     return;
   }
