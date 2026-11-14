@@ -24,6 +24,7 @@ from services.meal_erip import (
 )
 import calendar
 import webapp_server
+import tunnel_manager
 
 logging.basicConfig(
     level=logging.INFO,
@@ -33,6 +34,22 @@ logger = logging.getLogger(__name__)
 
 BOT_TOKEN = "8637861449:AAHFx0rVKG7kGWj9nWTUeFF25fPXgTeMHkc"
 bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML")
+
+
+def update_bot_webapp_menu_button(url: str):
+    """Set the Telegram chat menu button to launch Dzetva Mini App via HTTPS."""
+    if not url or not url.startswith("https://"):
+        return
+    try:
+        bot.set_chat_menu_button(
+            menu_button=types.MenuButtonWebApp(
+                text="📱 Dzetva",
+                web_app=types.WebAppInfo(url=url),
+            )
+        )
+        logger.info(f"Bot WebApp menu button updated: {url}")
+    except Exception as e:
+        logger.warning(f"Failed to update WebApp menu button: {e}")
 
 BELLS = {
     "1": "08:30–09:15",
@@ -57,12 +74,14 @@ WINTER_HOLIDAYS_START = datetime(2026, 12, 26)
 
 user_clients: Dict[int, SchoolsClient] = {}
 
-def get_client_for_user(user: Dict[str, Any]) -> SchoolsClient:
-    tg_id = user["tg_id"]
+def get_client_for_user(user_data: Optional[Dict[str, Any]]) -> Optional[SchoolsClient]:
+    if not user_data or not user_data.get("login") or not user_data.get("password"):
+        return None
+    tg_id = user_data["tg_id"]
     if tg_id in user_clients and user_clients[tg_id].logged_in:
         return user_clients[tg_id]
     client = SchoolsClient()
-    ok = client.login(user["login"], user["password"])
+    ok = client.login(user_data["login"], user_data["password"])
     if ok:
         user_clients[tg_id] = client
     return client
@@ -106,13 +125,19 @@ def get_main_keyboard(has_multi_pupils: bool = False) -> types.ReplyKeyboardMark
     markup.add(*extra)
     return markup
 
-def get_settings_keyboard(has_multi_pupils: bool, notifications_enabled: bool) -> types.InlineKeyboardMarkup:
+def get_settings_keyboard(
+    has_multi_pupils: bool,
+    notifications_enabled: bool,
+    has_login: bool = True,
+) -> types.InlineKeyboardMarkup:
     markup = types.InlineKeyboardMarkup()
     notify_text = "🔔 Уведомления: ВКЛ" if notifications_enabled else "🔕 Уведомления: ВЫКЛ"
     markup.add(types.InlineKeyboardButton(notify_text, callback_data="toggle_notify"))
     markup.add(types.InlineKeyboardButton("🍽 Счета питания (ЕРИП)", callback_data="meal_manage"))
     if has_multi_pupils:
         markup.add(types.InlineKeyboardButton("🔄 Переключить ученика", callback_data="switch_pupil"))
+    if not has_login:
+        markup.add(types.InlineKeyboardButton("🔐 Подключить дневник Schools.by", callback_data="start_schools_login"))
     return markup
 
 
@@ -195,51 +220,195 @@ def format_day_message(day_data: Dict[str, Any], header_prefix: str = "📅") ->
 
 # ================= HANDLERS =================
 
+
+def _send_diary_connect_prompt(chat_id: int):
+    """Send friendly prompt to link Schools.by while noting ERIP works without passwords."""
+    markup = types.InlineKeyboardMarkup()
+    markup.add(
+        types.InlineKeyboardButton(
+            "🔐 Подключить дневник Schools.by",
+            callback_data="start_schools_login",
+        )
+    )
+    bot.send_message(
+        chat_id,
+        "📘 <b>Дневник Schools.by пока не подключён</b>\n\n"
+        "Для просмотра расписания, домашних заданий и отметок подключите аккаунт Schools.by "
+        "(кнопка ниже или команда /login).\n\n"
+        "💡 <i>Если вы в 1–2 классе или вам нужен только ЕРИП (питание и кружки), "
+        "пароли не нужны — всё работает сразу через <b>📱 Dzetva</b> (/app) и <b>🍽 Питание и кружки</b> (/meal).</i>",
+        reply_markup=markup,
+    )
+
+
+def _require_schools_diary(message: types.Message) -> Optional[Dict[str, Any]]:
+    """Return user if Schools.by is linked; otherwise send connect prompt and return None."""
+    user = resolve_user_context(message)
+    if not user:
+        bot.send_message(message.chat.id, "Сначала запустите бота: /start")
+        return None
+    if not user.get("login") or not user.get("active_pupil_id"):
+        _send_diary_connect_prompt(message.chat.id)
+        return None
+    return user
+
+
+def _prompt_schools_login(chat_id: int):
+    """Start step-by-step Schools.by login prompt."""
+    msg = bot.send_message(
+        chat_id,
+        "🔐 <b>Подключение дневника Schools.by</b>\n\n"
+        "Введите ваш <b>логин</b> от schools.by (email или имя пользователя):\n"
+        "<i>Для отмены отправьте /cancel</i>",
+    )
+    bot.register_next_step_handler(msg, process_login_step)
+
+
 @bot.message_handler(commands=["start"])
 def handle_start(message: types.Message):
     if message.chat.type in ("group", "supergroup"):
         handle_bind(message)
         return
 
-    user = db.get_user(message.from_user.id)
-    if user:
-        pupils = db.get_user_pupils(message.from_user.id)
-        has_multi = len(pupils) > 1
-        name = user.get("active_pupil_name", "Ученик")
+    user_id = message.from_user.id
+    existing_user = db.get_user(user_id)
+    url = tunnel_manager.get_public_webapp_url()
+    personal_url = f"{url.rstrip('/')}/?uid={user_id}"
+
+    if not existing_user or not existing_user.get("login"):
+        db.ensure_basic_user(user_id, message.from_user.first_name or "")
+
         bot.send_message(
             message.chat.id,
-            f"👋 С возвращением!\n"
-            f"👤 Текущий дневник: <b>{name}</b>\n\n"
-            f"Выберите нужный раздел в меню ниже 👇",
-            reply_markup=get_main_keyboard(has_multi)
+            "👋 <b>Добро пожаловать в Dzetva!</b>\n"
+            "Школьный помощник для родителей: питание ЕРИП, кружки, учёт расходов и дневник Schools.by.",
+            reply_markup=get_main_keyboard(False),
         )
-    else:
-        msg = bot.send_message(
+
+        inline_kb = types.InlineKeyboardMarkup(row_width=1)
+        if url.startswith("https://"):
+            inline_kb.add(
+                types.InlineKeyboardButton(
+                    "📱 Открыть Dzetva (ЕРИП и кружки)",
+                    web_app=types.WebAppInfo(url=personal_url),
+                )
+            )
+        inline_kb.add(
+            types.InlineKeyboardButton(
+                "🍽 Подключить питание по 10 цифрам",
+                callback_data="meal_add_start",
+            )
+        )
+        inline_kb.add(
+            types.InlineKeyboardButton(
+                "🔐 Подключить дневник Schools.by",
+                callback_data="start_schools_login",
+            )
+        )
+
+        bot.send_message(
             message.chat.id,
-            "👋 <b>Добро пожаловать в Школьный Дневник (Schools.by)!</b>\n\n"
-            "🔐 Введите ваш <b>логин</b> от schools.by (email или имя пользователя):"
+            "🚀 <b>Начните без лишних паролей:</b>\n\n"
+            "• 🎒 <b>1–2 класс или нужен только ЕРИП (питание / кружки):</b> "
+            "пароли не нужны — можно начинать сразу!\n"
+            "• 📘 <b>Есть дневник Schools.by:</b> нажмите «Подключить дневник Schools.by» или введите /login.\n\n"
+            "Выберите действие 👇",
+            reply_markup=inline_kb,
         )
-        bot.register_next_step_handler(msg, process_login_step)
+        return
+
+    pupils = db.get_user_pupils(user_id)
+    has_multi = len(pupils) > 1
+    name = existing_user.get("active_pupil_name") or "Ученик"
+    bot.send_message(
+        message.chat.id,
+        f"👋 С возвращением!\n"
+        f"👤 Текущий дневник: <b>{html.escape(str(name))}</b>\n\n"
+        f"Выберите нужный раздел в меню ниже 👇\n"
+        f"📱 <i>Для питания ЕРИП, кружков и расходов также используйте кнопку <b>📱 Dzetva</b> или /app.</i>",
+        reply_markup=get_main_keyboard(has_multi),
+    )
+    if url.startswith("https://"):
+        app_kb = types.InlineKeyboardMarkup()
+        app_kb.add(
+            types.InlineKeyboardButton(
+                "📱 Открыть Dzetva",
+                web_app=types.WebAppInfo(url=personal_url),
+            )
+        )
+        bot.send_message(
+            message.chat.id,
+            "🚀 Быстрый запуск веб-приложения <b>Dzetva</b>:",
+            reply_markup=app_kb,
+        )
+
+
+@bot.message_handler(commands=["login"])
+def handle_login(message: types.Message):
+    if message.chat.type in ("group", "supergroup"):
+        bot.send_message(
+            message.chat.id,
+            "🔐 Для безопасности ввод логина и пароля Schools.by доступен только в личных сообщениях с ботом.",
+        )
+        return
+    db.ensure_basic_user(message.from_user.id, message.from_user.first_name or "")
+    _prompt_schools_login(message.chat.id)
+
+
+@bot.callback_query_handler(func=lambda c: c.data == "start_schools_login")
+def callback_start_schools_login(call: types.CallbackQuery):
+    bot.answer_callback_query(call.id)
+    if call.message and call.message.chat.type in ("group", "supergroup"):
+        bot.send_message(
+            call.message.chat.id,
+            "🔐 Откройте личный чат с ботом и отправьте /login, чтобы подключить дневник Schools.by.",
+        )
+        return
+    db.ensure_basic_user(call.from_user.id, call.from_user.first_name or "")
+    _prompt_schools_login(call.message.chat.id)
+
 
 def process_login_step(message: types.Message):
+    if not message.text:
+        bot.send_message(message.chat.id, "❌ Отправьте логин текстом или повторите через /login.")
+        return
     login = message.text.strip()
-    msg = bot.send_message(message.chat.id, "🔑 Теперь введите ваш <b>пароль</b> от schools.by:")
+    if login.lower() == "/cancel":
+        bot.send_message(message.chat.id, "❌ Подключение Schools.by отменено.")
+        return
+    if login.startswith("/"):
+        bot.send_message(
+            message.chat.id,
+            "ℹ️ Ввод логина отменён. Когда будете готовы, используйте /login или повторите команду.",
+        )
+        return
+    msg = bot.send_message(
+        message.chat.id,
+        "🔑 Теперь введите ваш <b>пароль</b> от schools.by:\n<i>Для отмены отправьте /cancel</i>",
+    )
     bot.register_next_step_handler(msg, process_password_step, login)
 
+
 def process_password_step(message: types.Message, login: str):
+    if not message.text:
+        bot.send_message(message.chat.id, "❌ Отправьте пароль текстом или повторите через /login.")
+        return
     password = message.text.strip()
+    if password.lower() == "/cancel":
+        bot.send_message(message.chat.id, "❌ Подключение Schools.by отменено.")
+        return
     try:
         bot.delete_message(message.chat.id, message.message_id)
     except Exception:
         pass
-    
+
     status_msg = bot.send_message(message.chat.id, "🔄 Проверяю авторизацию на schools.by...")
     client = SchoolsClient()
     ok = client.login(login, password)
     if not ok or not client.pupils:
         bot.edit_message_text(
             "❌ <b>Не удалось войти на schools.by.</b>\n"
-            "Пожалуйста, проверьте логин и пароль и попробуйте снова: /start",
+            "Пожалуйста, проверьте логин и пароль и попробуйте снова: /login",
             message.chat.id,
             status_msg.message_id
         )
@@ -248,13 +417,16 @@ def process_password_step(message: types.Message, login: str):
     active_pupil = client.pupils[0]
     db.save_user(message.from_user.id, login, password, active_pupil, client.pupils)
     user_clients[message.from_user.id] = client
-    
-    bot.delete_message(message.chat.id, status_msg.message_id)
+
+    try:
+        bot.delete_message(message.chat.id, status_msg.message_id)
+    except Exception:
+        pass
     bot.send_message(
         message.chat.id,
         f"✅ <b>Вход успешно выполнен!</b>\n\n"
-        f"👤 Ученик: <b>{active_pupil['name']}</b>\n"
-        f"🏫 Школа: {active_pupil['subdomain']}.schools.by\n\n"
+        f"👤 Ученик: <b>{html.escape(str(active_pupil['name']))}</b>\n"
+        f"🏫 Школа: {html.escape(str(active_pupil['subdomain']))}.schools.by\n\n"
         f"В меню ниже выберите интересующий раздел 👇",
         reply_markup=get_main_keyboard(len(client.pupils) > 1)
     )
@@ -267,10 +439,10 @@ def handle_bind(message: types.Message):
 
     user = db.get_user(message.from_user.id)
     if not user:
-        bot.send_message(message.chat.id, "Сначала войдите в боте в личных сообщениях через /start")
+        bot.send_message(message.chat.id, "Сначала запустите бота в личных сообщениях через /start")
         return
 
-    pupil_name = user.get("active_pupil_name", "Ученик")
+    pupil_name = user.get("active_pupil_name") or "Семейный профиль (ЕРИП)"
     db.bind_family_chat(message.chat.id, message.from_user.id, message.chat.title or "Семейный чат")
 
     text = (
@@ -296,14 +468,20 @@ def handle_bind(message: types.Message):
 @bot.message_handler(commands=["0", "today"])
 @bot.message_handler(func=lambda m: m.text and (m.text.strip().lower() in ("0", "/0", "сегодня", "📅 сегодня") or m.text.startswith("/0") or m.text.startswith("/today")))
 def handle_today(message: types.Message):
-    user = resolve_user_context(message)
+    user = _require_schools_diary(message)
     if not user:
-        bot.send_message(message.chat.id, "Сначала выполните вход: /start")
         return
 
     wait_msg = bot.send_message(message.chat.id, "⏳ Загружаю дневник...")
     try:
         client = get_client_for_user(user)
+        if not client:
+            try:
+                bot.delete_message(message.chat.id, wait_msg.message_id)
+            except Exception:
+                pass
+            _send_diary_connect_prompt(message.chat.id)
+            return
         diary = client.get_week_diary(user["active_pupil_id"], user["active_subdomain"])
         now = datetime.now()
         weekday_ru = RUSSIAN_WEEKDAYS[now.weekday()]
@@ -324,14 +502,20 @@ def handle_today(message: types.Message):
 @bot.message_handler(commands=["1", "tomorrow"])
 @bot.message_handler(func=lambda m: m.text and (m.text.strip().lower() in ("1", "/1", "завтра", "📆 завтра") or m.text.startswith("/1") or m.text.startswith("/tomorrow")))
 def handle_tomorrow(message: types.Message):
-    user = resolve_user_context(message)
+    user = _require_schools_diary(message)
     if not user:
-        bot.send_message(message.chat.id, "Сначала выполните вход: /start")
         return
 
     wait_msg = bot.send_message(message.chat.id, "⏳ Загружаю дневник...")
     try:
         client = get_client_for_user(user)
+        if not client:
+            try:
+                bot.delete_message(message.chat.id, wait_msg.message_id)
+            except Exception:
+                pass
+            _send_diary_connect_prompt(message.chat.id)
+            return
         now = datetime.now()
         tomorrow = now + timedelta(days=1)
         weekday_ru = RUSSIAN_WEEKDAYS[tomorrow.weekday()]
@@ -363,14 +547,20 @@ def handle_tomorrow(message: types.Message):
 @bot.message_handler(commands=["7", "week"])
 @bot.message_handler(func=lambda m: m.text and (m.text.strip().lower() in ("7", "/7", "неделя", "🗓 вся неделя") or m.text.startswith("/7") or m.text.startswith("/week")))
 def handle_week(message: types.Message):
-    user = resolve_user_context(message)
+    user = _require_schools_diary(message)
     if not user:
-        bot.send_message(message.chat.id, "Сначала выполните вход: /start")
         return
 
     wait_msg = bot.send_message(message.chat.id, "⏳ Загружаю расписание на всю неделю...")
     try:
         client = get_client_for_user(user)
+        if not client:
+            try:
+                bot.delete_message(message.chat.id, wait_msg.message_id)
+            except Exception:
+                pass
+            _send_diary_connect_prompt(message.chat.id)
+            return
         diary = client.get_week_diary(user["active_pupil_id"], user["active_subdomain"])
         days = diary.get("days", [])
         bot.delete_message(message.chat.id, wait_msg.message_id)
@@ -403,18 +593,24 @@ def handle_week(message: types.Message):
 @bot.message_handler(commands=["m", "marks"])
 @bot.message_handler(func=lambda m: m.text and (m.text.strip().lower() in ("m", "м", "/m", "/м", "оценки", "отметки", "📊 четвертные оценки") or m.text.startswith("/m") or m.text.startswith("/marks") or m.text.startswith("/м")))
 def handle_quarter_marks(message: types.Message):
-    user = resolve_user_context(message)
+    user = _require_schools_diary(message)
     if not user:
-        bot.send_message(message.chat.id, "Сначала выполните вход: /start")
         return
 
     wait_msg = bot.send_message(message.chat.id, "⏳ Загружаю четвертные оценки...")
     try:
         client = get_client_for_user(user)
+        if not client:
+            try:
+                bot.delete_message(message.chat.id, wait_msg.message_id)
+            except Exception:
+                pass
+            _send_diary_connect_prompt(message.chat.id)
+            return
         q_data = client.get_quarter_marks(user["active_pupil_id"], user["active_subdomain"])
         subjects = q_data.get("subjects", [])
         avg = q_data.get("average", "")
-        pupil_name = user.get("active_pupil_name", "Ученик")
+        pupil_name = user.get("active_pupil_name") or "Ученик"
         bot.delete_message(message.chat.id, wait_msg.message_id)
 
         if not subjects:
@@ -499,7 +695,7 @@ HELP_TEXT = (
     "⚡️ <b>БЫСТРЫЕ КОМАНДЫ:</b>\n"
     "• <code>/0</code> — Сегодня • <code>/1</code> — Завтра • <code>/7</code> — Неделя • <code>/m</code> — Оценки\n"
     "• <code>/meal</code> — Балансы ЕРИП • <code>/check_alerts</code> — Проверить алерты\n"
-    "• <code>/expenses</code> — Расходы • <code>/app</code> — Открыть Dzetva • <code>/bind</code> — Семейный чат"
+    "• <code>/expenses</code> — Расходы • <code>/app</code> — Открыть Dzetva • <code>/login</code> — Дневник Schools.by • <code>/bind</code> — Семейный чат"
 )
 
 
@@ -512,14 +708,42 @@ def handle_help(message: types.Message):
 @bot.message_handler(commands=["app"])
 @bot.message_handler(func=lambda m: m.text and ("dzetva" in m.text.lower() or "школьный пульт" in m.text.lower() or "📱" in m.text))
 def handle_open_app(message: types.Message):
-    app_url = os.environ.get("WEBAPP_PUBLIC_URL", "http://192.168.1.35:8080")
-    bot.send_message(
-        message.chat.id,
-        f"📱 <b>Dzetva (веб-приложение)</b>\n\n"
-        f"Откройте в браузере телефона:\n"
-        f"👉 {app_url}\n\n"
-        f"💡 <i>Чтобы добавить как отдельное приложение: нажмите «Поделиться / Меню браузера» → «На экран Домой».</i>",
-    )
+    url = tunnel_manager.get_public_webapp_url()
+    uid = message.from_user.id
+    personal_url = f"{url.rstrip('/')}/?uid={uid}"
+    local_url = f"http://192.168.1.35:8080/?uid={uid}"
+
+    markup = None
+    if url.startswith("https://"):
+        markup = types.InlineKeyboardMarkup(row_width=1)
+        if message.chat.type == "private":
+            markup.add(
+                types.InlineKeyboardButton(
+                    "📱 Открыть Dzetva в Telegram",
+                    web_app=types.WebAppInfo(url=personal_url),
+                )
+            )
+        markup.add(types.InlineKeyboardButton("🌐 Открыть в браузере", url=personal_url))
+
+        text = (
+            f"📱 <b>Dzetva — веб-приложение</b>\n\n"
+            f"Нажмите «<b>📱 Открыть Dzetva в Telegram</b>», чтобы запустить <b>Telegram Mini App</b> прямо внутри Telegram "
+            f"(работает с любого интернета и мобильной сети).\n\n"
+            f"🌐 Ссылка для браузера:\n<code>{html.escape(personal_url)}</code>\n\n"
+            f"🏠 Локальный Wi-Fi (в одной сети с приставкой): <code>http://192.168.1.35:8080</code> "
+            f"(<code>{html.escape(local_url)}</code>)\n\n"
+            f"💡 <i>В браузере телефона можно нажать «Поделиться / Меню» → «На экран Домой», чтобы установить как приложение.</i>"
+        )
+    else:
+        text = (
+            f"📱 <b>Dzetva — веб-приложение</b>\n\n"
+            f"Публичный HTTPS-туннель сейчас не активен, поэтому приложение открывается по локальному Wi-Fi (в одной сети с сервером):\n"
+            f"👉 <code>{html.escape(personal_url)}</code>\n\n"
+            f"🏠 Адрес домашнего сервера: <code>http://192.168.1.35:8080</code>\n\n"
+            f"💡 <i>Когда активен HTTPS-туннель (или задан WEBAPP_PUBLIC_URL), здесь появится кнопка для Telegram Mini App из любой точки мира.</i>"
+        )
+
+    bot.send_message(message.chat.id, text, reply_markup=markup)
 
 
 @bot.message_handler(commands=["expenses", "spend"])
@@ -563,22 +787,26 @@ def handle_settings(message: types.Message):
         return
     pupils = db.get_user_pupils(user["tg_id"])
     has_multi = len(pupils) > 1
+    has_login = bool(user.get("login"))
     is_on = user.get("notify_new_grades", 1) == 1
-    pupil_name = user.get("active_pupil_name", "Ученик")
+    pupil_name = user.get("active_pupil_name") or ("Ученик" if has_login else "не подключён (только ЕРИП)")
     notify_val = "ВКЛ 🔔" if is_on else "ВЫКЛ 🔕"
     text = (
         f"⚙️ <b>Настройки:</b>\n\n"
-        f"👤 Активный дневник: <b>{pupil_name}</b>\n"
+        f"👤 Активный дневник: <b>{html.escape(str(pupil_name))}</b>\n"
         f"🔔 Автоуведомления: <b>{notify_val}</b>\n\n"
         f"Нажмите на кнопку ниже, чтобы изменить:"
     )
-    bot.send_message(message.chat.id, text, reply_markup=get_settings_keyboard(has_multi, is_on))
+    bot.send_message(
+        message.chat.id,
+        text,
+        reply_markup=get_settings_keyboard(has_multi, is_on, has_login=has_login),
+    )
 
 @bot.message_handler(func=lambda m: m.text and ("сменить дневник" in m.text.lower() or "переключить" in m.text.lower()))
 def handle_switch_pupil_btn(message: types.Message):
-    user = resolve_user_context(message)
+    user = _require_schools_diary(message)
     if not user:
-        bot.send_message(message.chat.id, "Сначала выполните вход: /start")
         return
     pupils = db.get_user_pupils(user["tg_id"])
     if not pupils:
@@ -591,6 +819,10 @@ def callback_switch_pupil(call: types.CallbackQuery):
     user = resolve_callback_user(call)
     if not user:
         bot.answer_callback_query(call.id, "Сначала выполните вход: /start")
+        return
+    if not user.get("login") or not user.get("active_pupil_id"):
+        bot.answer_callback_query(call.id)
+        _send_diary_connect_prompt(call.message.chat.id)
         return
     pupils = db.get_user_pupils(user["tg_id"])
     if not pupils:
@@ -624,8 +856,13 @@ def callback_toggle_notify(call: types.CallbackQuery):
     target_uid = user["tg_id"] if user else call.from_user.id
     is_on = db.toggle_notifications(target_uid)
     pupils = db.get_user_pupils(target_uid) if user else []
+    has_login = bool(user and user.get("login"))
     try:
-        bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=get_settings_keyboard(len(pupils) > 1, is_on))
+        bot.edit_message_reply_markup(
+            call.message.chat.id,
+            call.message.message_id,
+            reply_markup=get_settings_keyboard(len(pupils) > 1, is_on, has_login=has_login),
+        )
     except Exception:
         pass
     status_str = "включены" if is_on else "отключены"
@@ -838,6 +1075,8 @@ def callback_meal_manage(call: types.CallbackQuery):
 @bot.callback_query_handler(func=lambda c: c.data == "meal_add_start")
 def callback_meal_add_start(call: types.CallbackQuery):
     user = resolve_callback_user(call)
+    if not user and call.message and call.message.chat.type == "private":
+        user = db.ensure_basic_user(call.from_user.id, call.from_user.first_name or "")
     if not user:
         bot.answer_callback_query(call.id, "Сначала выполните вход: /start")
         return
@@ -1206,9 +1445,13 @@ def notifier_loop():
             # 2. Напоминание расписания в 16:00 (Вс-Чт)
             if now.weekday() in (6, 0, 1, 2, 3) and now.hour == 16 and now.minute < 30:
                 for u in users:
+                    if not u.get("login") or not u.get("active_pupil_id"):
+                        continue
                     if u.get("notify_new_grades", 1):
                         if not db.has_daily_reminder_been_sent(u["tg_id"], today_str):
                             client = get_client_for_user(u)
+                            if not client:
+                                continue
                             tomorrow = now + timedelta(days=1)
                             weekday_ru = RUSSIAN_WEEKDAYS[tomorrow.weekday()]
                             is_next_week = False
@@ -1236,11 +1479,15 @@ def notifier_loop():
             if 8 <= now.hour <= 20 and (now_ts - last_grades_check >= 15 * 60):
                 last_grades_check = now_ts
                 for u in users:
+                    if not u.get("login") or not u.get("active_pupil_id"):
+                        continue
                     if u.get("notify_new_grades", 1):
                         client = get_client_for_user(u)
+                        if not client:
+                            continue
                         pupil_id = u["active_pupil_id"]
                         subdomain = u["active_subdomain"]
-                        name = u.get("active_pupil_name", "Ученик")
+                        name = u.get("active_pupil_name") or "Ученик"
                         diary = client.get_week_diary(pupil_id, subdomain)
                         q_id = str(diary.get("quarter_id") or "curr")
                         is_init = db.is_initial_marks_sync(pupil_id, q_id)
@@ -1274,15 +1521,19 @@ def notifier_loop():
             # 4. Пятничный дайджест в 17:00
             if now.weekday() == 4 and now.hour == 17 and now.minute < 30:
                 for u in users:
+                    if not u.get("login") or not u.get("active_pupil_id"):
+                        continue
                     digest_key = f"digest_{today_str}"
                     if not db.has_daily_reminder_been_sent(u["tg_id"], digest_key):
                         client = get_client_for_user(u)
+                        if not client:
+                            continue
                         q_data = client.get_quarter_marks(u["active_pupil_id"], u["active_subdomain"])
                         avg = q_data.get("average", "—")
                         days_to_holidays = max((WINTER_HOLIDAYS_START - now).days, 0)
                         text = (
                             f"🎉 <b>Пятничный дайджест недели!</b>\n\n"
-                            f"👤 <b>{u.get('active_pupil_name', 'Ученик')}</b> отлично потрудилась на этой неделе!\n"
+                            f"👤 <b>{u.get('active_pupil_name') or 'Ученик'}</b> отлично потрудилась на этой неделе!\n"
                             f"📊 Текущий средний балл: <b>{avg}</b>\n"
                             f"🏖 До зимних каникул осталось: <b>{days_to_holidays} дней</b>!\n\n"
                             f"Желаем всей семье прекрасных и уютных выходных! 🌟"
@@ -1363,7 +1614,19 @@ def main():
     # Запуск PWA веб-приложения «Dzetva»
     w = threading.Thread(target=webapp_server.run_webapp_in_thread, kwargs={"host": "0.0.0.0", "port": webapp_server.DEFAULT_PORT}, daemon=True)
     w.start()
-    
+
+    existing_public_url = tunnel_manager.get_public_webapp_url()
+    if existing_public_url.startswith("https://"):
+        update_bot_webapp_menu_button(existing_public_url)
+
+    if os.environ.get("DISABLE_TUNNEL") != "1" and (
+        os.path.exists("/data/data/com.termux") or os.environ.get("ENABLE_PUBLIC_TUNNEL") == "1"
+    ):
+        tunnel_manager.start_tunnel_thread(
+            local_port=webapp_server.DEFAULT_PORT,
+            on_new_url=update_bot_webapp_menu_button,
+        )
+
     logger.info("Bot starting polling on Xiaomi Mi Box...")
     while True:
         try:

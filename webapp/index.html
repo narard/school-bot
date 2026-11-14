@@ -10,6 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
     :root {
       /* Google Material You (Material 3) */
@@ -1328,6 +1329,26 @@
       + Добавить ребёнка
     </button>
 
+    <div class="sec-title" style="margin-bottom:8px;">Дневник Schools.by</div>
+    <div class="step-box" style="margin-bottom:10px;" id="settingsSchoolsStatusBox">
+      <div style="min-width:0;">
+        <div style="font-size:13px;font-weight:600;color:var(--text-sec);word-break:break-word;" id="settingsSchoolsStatusText">Не подключён · ЕРИП, питание и кружки работают без пароля</div>
+      </div>
+      <button class="btn-pill btn-tonal" type="button" id="settingsSchoolsToggleBtn" style="flex-shrink:0;" onclick="toggleSchoolsLoginForm()">Подключить</button>
+    </div>
+    <div id="schoolsLoginFormWrap" style="display:none;margin-bottom:16px;padding:12px;border-radius:16px;background:var(--surface-soft);border:1px solid var(--outline);">
+      <div class="field">
+        <label for="schoolsLoginInput">Логин Schools.by</label>
+        <input class="input" id="schoolsLoginInput" autocomplete="username" placeholder="Логин родителя или ученика" />
+      </div>
+      <div class="field">
+        <label for="schoolsPassInput">Пароль Schools.by</label>
+        <input class="input" id="schoolsPassInput" type="password" autocomplete="current-password" placeholder="Пароль" />
+      </div>
+      <div class="form-err" id="schoolsLoginError"></div>
+      <button class="btn btn-primary" type="button" id="schoolsLoginSaveBtn" onclick="saveSchoolsLogin()">Войти и синхронизировать детей</button>
+    </div>
+
     <div class="sec-title" style="margin-bottom:8px;">Оформление Google</div>
     <div class="seg-bar" style="margin-bottom:18px;">
       <button class="seg-btn" id="themeBtnLight" onclick="setGoogleTheme('google')">Светлое</button>
@@ -1633,6 +1654,17 @@ function toggleGoogleTheme() {
   const cur = document.documentElement.getAttribute("data-theme");
   setGoogleTheme(cur === "google-dark" ? "google" : "google-dark");
 }
+(function initTelegramWebApp() {
+  try {
+    const tg = window.Telegram && window.Telegram.WebApp;
+    if (!tg) return;
+    tg.ready();
+    tg.expand();
+    if (!localStorage.getItem("hub_google_theme") && tg.colorScheme === "dark") {
+      applyGoogleTheme("google-dark");
+    }
+  } catch {}
+})();
 (function initTheme() {
   const params = new URLSearchParams(location.search);
   const q = params.get("theme");
@@ -1660,6 +1692,7 @@ const state = {
   selectedOrg: null, selectedService: null, inspectServices: [], searchItems: [],
   clubSearchMode: "search",
   payClub: null,
+  schoolsByConnected: false, schoolsByLogin: "", initialTabResolved: false,
 };
 
 function triggerAnim(el, cls = "anim-tab") {
@@ -1690,7 +1723,12 @@ function showFormErr(id, msg) {
   else { el.textContent = msg; el.style.display = "block"; }
 }
 async function api(url, opts = {}) {
-  const res = await fetch(url, opts);
+  const headers = Object.assign({}, opts.headers || {});
+  const tgInitData = window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData;
+  if (tgInitData) headers["X-Telegram-Init-Data"] = tgInitData;
+  const pageUid = new URLSearchParams(location.search).get("uid");
+  if (pageUid) headers["X-User-Uid"] = pageUid;
+  const res = await fetch(url, Object.assign({}, opts, { headers }));
   return await res.json();
 }
 function shareIconSvg() {
@@ -1757,6 +1795,15 @@ async function loadBootstrap() {
   state.clubs = data.clubs || [];
   state.districts = data.districts || [];
   state.expenses = data.month_expenses;
+  state.schoolsByConnected = Boolean(data.schools_by_connected);
+  state.schoolsByLogin = data.schools_by_login || "";
+  if (!state.initialTabResolved) {
+    state.initialTabResolved = true;
+    if (!state.children.some(c => c.pupil_id)) {
+      state.activeTab = "wallet";
+      document.querySelectorAll(".nav-item").forEach(b => b.classList.toggle("active", b.dataset.tab === "wallet"));
+    }
+  }
   state.children.forEach(c => {
     if (!(c.id in state.expandedChildren) && !state.clubs.some(cl => cl.child_id === c.id)) {
       state.expandedChildren[c.id] = true;
@@ -2435,7 +2482,7 @@ function renderDiaryTab() {
 
   if (!d.ok) {
     if (d.no_schools_by) {
-      html += `<div class="empty-card"><h3>Дневник пока не подключён</h3><p>В 1–2 классах электронный дневник в Schools.by часто не заводят (безотметочное обучение). Все счета питания и кружков этого ребёнка доступны во вкладке «Баланс».</p><button class="btn btn-soft" onclick="switchTab('wallet')">Перейти к балансу</button></div>`;
+      html += `<div class="empty-card"><h3>Дневник пока не подключён</h3><p>В 1–2 классах электронный дневник в Schools.by часто не заводят (безотметочное обучение). Все счета питания и кружков этого ребёнка доступны во вкладке «Баланс».</p><button class="btn btn-soft" onclick="switchTab('wallet')">Перейти к балансу</button><button class="btn btn-neutral" style="margin-top:8px;" onclick="openSettingsModal(); toggleSchoolsLoginForm(true);">Подключить дневник Schools.by</button></div>`;
     } else {
       html += `<div class="empty-card"><h3>Нет данных дневника</h3><p>${esc(d.error || "Проверьте привязку Schools.by в настройках или в Telegram-боте")}</p></div>`;
     }
@@ -2693,7 +2740,80 @@ function openSettingsModal() {
       </div>
     `).join("")
     : `<div style="font-size:13px;color:var(--muted);margin-bottom:10px;">Профилей пока нет</div>`;
+  const statusEl = document.getElementById("settingsSchoolsStatusText");
+  const toggleBtn = document.getElementById("settingsSchoolsToggleBtn");
+  if (statusEl) {
+    statusEl.innerHTML = state.schoolsByConnected
+      ? (state.schoolsByLogin ? `✓ Подключён (${esc(state.schoolsByLogin)})` : "✓ Подключён")
+      : "Не подключён · ЕРИП, питание и кружки работают без пароля";
+    statusEl.style.color = state.schoolsByConnected ? "var(--ok-text)" : "var(--text-sec)";
+  }
+  if (toggleBtn) {
+    toggleBtn.textContent = state.schoolsByConnected ? "Сменить" : "Подключить";
+  }
+  const loginEl = document.getElementById("schoolsLoginInput");
+  const passEl = document.getElementById("schoolsPassInput");
+  if (loginEl) loginEl.value = state.schoolsByLogin || "";
+  if (passEl) passEl.value = "";
+  toggleSchoolsLoginForm(false);
   openModal("modalSettings");
+}
+
+function toggleSchoolsLoginForm(forceOpen) {
+  const wrap = document.getElementById("schoolsLoginFormWrap");
+  if (!wrap) return;
+  const open = typeof forceOpen === "boolean" ? forceOpen : wrap.style.display === "none";
+  wrap.style.display = open ? "block" : "none";
+  showFormErr("schoolsLoginError", "");
+  if (open) {
+    const loginEl = document.getElementById("schoolsLoginInput");
+    if (loginEl) {
+      if (!loginEl.value && state.schoolsByLogin) loginEl.value = state.schoolsByLogin;
+      setTimeout(() => loginEl.focus(), 50);
+    }
+  }
+}
+
+async function saveSchoolsLogin() {
+  showFormErr("schoolsLoginError", "");
+  const loginEl = document.getElementById("schoolsLoginInput");
+  const passEl = document.getElementById("schoolsPassInput");
+  const btn = document.getElementById("schoolsLoginSaveBtn");
+  const login = (loginEl ? loginEl.value : "").trim();
+  const password = passEl ? passEl.value : "";
+  if (!login) return showFormErr("schoolsLoginError", "Введите логин Schools.by");
+  if (!password) return showFormErr("schoolsLoginError", "Введите пароль Schools.by");
+  const origText = btn ? btn.textContent : "Войти и синхронизировать детей";
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Подключаем...";
+  }
+  try {
+    const res = await api("/api/schools/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ login, password }),
+    });
+    if (!res || !res.ok) {
+      showFormErr("schoolsLoginError", (res && res.error) || "Не удалось подключить Schools.by");
+      return;
+    }
+    if (passEl) passEl.value = "";
+    toggleSchoolsLoginForm(false);
+    showToast("Дневник Schools.by подключён!");
+    await loadBootstrap();
+    const modal = document.getElementById("modalSettings");
+    if (modal && modal.classList.contains("open")) {
+      openSettingsModal();
+    }
+  } catch {
+    showFormErr("schoolsLoginError", "Ошибка сети при подключении к Schools.by");
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = origText;
+    }
+  }
 }
 
 function openPayModal(clubId, focusConfirm = false) {

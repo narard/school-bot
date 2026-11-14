@@ -19,6 +19,8 @@ def _xor_cipher(data: str) -> str:
     return "XOR:" + base64.b64encode(xor_bytes).decode("ascii")
 
 def _decrypt_pass(enc_data: str) -> str:
+    if not enc_data:
+        return ""
     if enc_data.startswith("XOR:"):
         try:
             raw = enc_data[4:]
@@ -204,6 +206,30 @@ def get_user(tg_id: int) -> Optional[Dict[str, Any]]:
         d = dict(row)
         d["password"] = _decrypt_pass(d["password_enc"])
         return d
+
+def ensure_basic_user(tg_id: int, first_name: str = "") -> Dict[str, Any]:
+    existing = get_user(tg_id)
+    if existing:
+        return existing
+    clean_name = (first_name or "").strip() or None
+    with get_db() as conn:
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO users (tg_id, login, password_enc, active_pupil_id, active_pupil_name, active_subdomain, notify_time)
+            VALUES (?, '', '', NULL, ?, NULL, '16:00')
+            """,
+            (tg_id, clean_name),
+        )
+        conn.commit()
+    return get_user(tg_id) or {
+        "tg_id": tg_id,
+        "login": "",
+        "password_enc": "",
+        "password": "",
+        "active_pupil_id": None,
+        "active_pupil_name": clean_name,
+        "active_subdomain": None,
+    }
 
 def get_all_users() -> List[Dict[str, Any]]:
     with get_db() as conn:
