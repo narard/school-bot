@@ -1142,7 +1142,7 @@
       background: #1F1F1F;
       color: #FFFFFF;
       padding: 10px 18px;
-      border-radius: 999px;
+      border-radius: 24px;
       font-size: 13px;
       font-weight: 600;
       z-index: 120;
@@ -1150,7 +1150,9 @@
       opacity: 0;
       pointer-events: none;
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
-      white-space: nowrap;
+      max-width: calc(100vw - 32px);
+      white-space: normal;
+      text-align: center;
       transition: opacity 0.2s ease, transform 0.26s cubic-bezier(0.22, 1, 0.36, 1), visibility 0.2s ease;
     }
     .toast.show {
@@ -1357,7 +1359,7 @@
       <input class="input" id="childNameInput" placeholder="Например: Иван" />
     </div>
     <div class="field">
-      <label>Район школы в Минске</label>
+      <label>Город / район школы (Беларусь)</label>
       <select id="childDistrictSelect"></select>
     </div>
     <div class="field">
@@ -1387,18 +1389,33 @@
     </div>
 
     <div class="field">
-      <label>Шаг 2. Найдите организацию (из базы ЕРИП Минска)</label>
-      <div class="quick-tags">
-        <button class="quick-tag" type="button" onclick="quickSearchClub('КодЭндБот')">КодЭндБот</button>
-        <button class="quick-tag" type="button" onclick="quickSearchClub('Спорт')">Спорт</button>
-        <button class="quick-tag" type="button" onclick="quickSearchClub('Танцы')">Танцы</button>
-        <button class="quick-tag" type="button" onclick="quickSearchClub('Английский')">Языки</button>
+      <label>Шаг 2. Найдите услугу в ЕРИП</label>
+      <div class="seg-bar" style="margin-bottom:10px;background:var(--surface-soft);box-shadow:none;">
+        <button class="seg-btn active" type="button" id="clubModeSearchBtn" onclick="setClubSearchMode('search')">По названию (Минск)</button>
+        <button class="seg-btn" type="button" id="clubModeCodeBtn" onclick="setClubSearchMode('code')">По коду ЕРИП (вся РБ)</button>
       </div>
-      <input class="input" id="clubSearchInput" placeholder="Начните писать название..." oninput="debouncedClubSearch()" />
-    </div>
-
-    <div class="search-list" id="clubSearchResults">
-      <div style="padding:14px;text-align:center;color:var(--muted);font-size:13px;">Загрузка списка...</div>
+      <div id="clubSearchModeWrap">
+        <div class="quick-tags">
+          <button class="quick-tag" type="button" onclick="quickSearchClub('КодЭндБот')">КодЭндБот</button>
+          <button class="quick-tag" type="button" onclick="quickSearchClub('Спорт')">Спорт</button>
+          <button class="quick-tag" type="button" onclick="quickSearchClub('Танцы')">Танцы</button>
+          <button class="quick-tag" type="button" onclick="quickSearchClub('Английский')">Языки</button>
+        </div>
+        <input class="input" id="clubSearchInput" placeholder="Начните писать название..." oninput="debouncedClubSearch()" />
+        <div class="search-list" id="clubSearchResults" style="margin-top:10px;margin-bottom:0;">
+          <div style="padding:14px;text-align:center;color:var(--muted);font-size:13px;">Загрузка списка...</div>
+        </div>
+      </div>
+      <div id="clubCodeModeWrap" style="display:none;">
+        <div style="font-size:12.5px;color:var(--muted);line-height:1.45;margin-bottom:8px;">
+          Введите номер услуги ЕРИП из чека или банковского приложения (работает для любого города Беларуси, например 4435821 или 5333241)
+        </div>
+        <div style="display:flex;gap:8px;">
+          <input class="input" id="clubDirectCodeInput" type="text" inputmode="numeric" placeholder="Например: 4435821" onkeydown="if(event.key==='Enter'){event.preventDefault();lookupByEripCode();}" />
+          <button class="btn btn-soft" id="clubDirectCodeBtn" style="width:auto;padding:0 18px;height:44px;flex-shrink:0;" type="button" onclick="lookupByEripCode()">Найти</button>
+        </div>
+        <div id="clubDirectCodeStatus" style="font-size:12.5px;margin-top:6px;"></div>
+      </div>
     </div>
 
     <div id="clubStepDetails" style="display:none;border-top:1px solid var(--outline);padding-top:14px;">
@@ -1409,6 +1426,18 @@
       <div class="field" id="clubServicePickerWrap" style="display:none;">
         <label>Услуга в ЕРИП</label>
         <select id="clubServiceSelect" onchange="onSelectSubService()"></select>
+      </div>
+      <div class="field">
+        <label for="clubKindSelect">Тип счёта</label>
+        <select id="clubKindSelect">
+          <option value="club">Кружок / секция</option>
+          <option value="canteen">Школьная столовая</option>
+          <option value="buffet">Школьный буфет</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="clubCustomOrgInput">Название для карточки в приложении</label>
+        <input class="input" id="clubCustomOrgInput" placeholder="Например: Столовая СШ №15 г. Гродно" />
       </div>
       <div class="field">
         <label id="clubAccLabel">Шаг 3. Номер договора / ученика</label>
@@ -1476,6 +1505,15 @@
       <button class="btn btn-primary" id="payConfirmBtn">Готово, я оплатил(а)</button>
     </div>
 
+    <div id="payShareWrap" style="margin-top:10px;">
+      <button class="btn btn-soft" type="button" onclick="sharePayDetailsToChat()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+        </svg>
+        Отправить реквизиты в чат класса
+      </button>
+    </div>
     <div id="payEditWrap" style="margin-top:10px;">
       <button class="btn btn-neutral" id="payEditBtn">Настроить счёт / стоимость</button>
     </div>
@@ -1620,6 +1658,7 @@ const state = {
   expenses: null, diary: null,
   swipeDir: 0, tabAnim: true,
   selectedOrg: null, selectedService: null, inspectServices: [], searchItems: [],
+  clubSearchMode: "search",
   payClub: null,
 };
 
@@ -1654,9 +1693,53 @@ async function api(url, opts = {}) {
   const res = await fetch(url, opts);
   return await res.json();
 }
+function shareIconSvg() {
+  return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>`;
+}
+function copyViaTextareaFallback(txt) {
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = txt;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.top = "-9999px";
+    ta.style.left = "-9999px";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    ta.setSelectionRange(0, ta.value.length);
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return Boolean(ok);
+  } catch {
+    return false;
+  }
+}
+async function copyToClipboardRaw(txt) {
+  const val = String(txt || "");
+  if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+    try {
+      await navigator.clipboard.writeText(val);
+      return true;
+    } catch {}
+  }
+  return copyViaTextareaFallback(val);
+}
 async function copyText(txt) {
-  try { await navigator.clipboard.writeText(txt); showToast("Скопировано: " + txt); }
-  catch { showToast("Номер: " + txt); }
+  const ok = await copyToClipboardRaw(txt);
+  showToast(ok ? "Скопировано: " + txt : "Номер: " + txt);
+}
+async function shareOrCopyText(text, toastMsg, shareTitle = "Расписание и ДЗ") {
+  let sharePromise = null;
+  if (typeof navigator.share === "function") {
+    try {
+      sharePromise = navigator.share({ title: shareTitle, text }).catch(() => {});
+    } catch {}
+  }
+  const copied = await copyToClipboardRaw(text);
+  showToast(copied ? toastMsg : "Не удалось скопировать");
+  if (sharePromise) await sharePromise;
 }
 
 function openModal(id) { document.getElementById(id).classList.add("open"); }
@@ -1787,8 +1870,8 @@ function childNameById(cid) {
 }
 
 function clubFriendlyTitle(club) {
-  if (club.kind === "canteen") return "Школьная столовая";
-  if (club.kind === "buffet") return "Школьный буфет";
+  if (club.kind === "canteen") return club.org_name && club.org_name !== "КШП Столовая" ? club.org_name : "Школьная столовая";
+  if (club.kind === "buffet") return club.org_name && club.org_name !== "КШП Буфет" ? club.org_name : "Школьный буфет";
   if (club.kind === "school_club") return "Школьные кружки";
   return club.org_name;
 }
@@ -2275,6 +2358,62 @@ function renderLessonsList(lessons) {
   `).join("");
 }
 
+function renderDiaryShareBtn() {
+  return `<button class="btn btn-soft" type="button" style="margin-bottom:12px;" onclick="shareDiaryToChat()">${shareIconSvg()}Поделиться расписанием и ДЗ в чат класса</button>`;
+}
+
+function formatDiaryLessonsLines(lessons) {
+  const lines = [];
+  (lessons || []).forEach((les, idx) => {
+    if (!les || !les.subject) return;
+    const num = les.number ? `${les.number}. ` : `${idx + 1}. `;
+    const time = les.time ? ` (${les.time})` : "";
+    lines.push(`${num}${les.subject}${time}`);
+    if (les.homework && String(les.homework).trim()) {
+      lines.push(`   📝 ДЗ: ${String(les.homework).trim()}`);
+    }
+  });
+  return lines;
+}
+
+function shareDiaryToChat() {
+  const d = state.diary;
+  if (!d || !d.ok || d.no_schools_by) return;
+  const isDay = state.diaryMode === "day" || state.diaryMode === "today" || state.diaryMode === "tomorrow";
+  const lines = [];
+
+  if (isDay) {
+    const lessonLines = formatDiaryLessonsLines(d.lessons);
+    if (!lessonLines.length) return showToast("На этот день уроков нет");
+    lines.push(`📚 Расписание и ДЗ — ${d.day_title || d.target_date || "День"}`);
+    lines.push("");
+    lines.push(...lessonLines);
+  } else if (state.diaryMode === "week") {
+    const days = d.days || [];
+    let hasLessons = false;
+    lines.push(`📚 Расписание и ДЗ — ${d.period || "Неделя"}`);
+    days.forEach(day => {
+      const dayLines = formatDiaryLessonsLines(day.lessons);
+      if (!dayLines.length) return;
+      hasLessons = true;
+      lines.push("");
+      lines.push(`📅 ${day.title}`);
+      lines.push(...dayLines);
+    });
+    if (!hasLessons) return showToast("На эту неделю уроков нет");
+  } else {
+    return;
+  }
+
+  lines.push("");
+  lines.push("✨ Собрано в Dzetva — школьный помощник (Расписание и ЕРИП)");
+  shareOrCopyText(
+    lines.join("\n"),
+    "Скопировано для чата класса! Отправьте в Viber или Telegram",
+    "Расписание и ДЗ"
+  );
+}
+
 function renderDiaryTab() {
   const el = document.getElementById("mainContent");
   const d = state.diary || {};
@@ -2374,6 +2513,7 @@ function renderDiaryTab() {
         ${renderLessonsList(d.lessons)}
         ${d.attendance ? `<div style="font-size:12px;color:var(--muted);margin:12px 0 0;padding-top:10px;border-top:1px solid var(--surface-soft);">${esc(d.attendance)}</div>` : ""}
       </div>
+      ${((d.lessons || []).length && !d.no_schools_by) ? renderDiaryShareBtn() : ""}
     `;
   } else if (state.diaryMode === "week") {
     html += `
@@ -2398,6 +2538,9 @@ function renderDiaryTab() {
           ${renderLessonsList(day.lessons)}
         </div>
       `).join("");
+      if (days.some(day => (day.lessons || []).length > 0) && !d.no_schools_by) {
+        html += renderDiaryShareBtn();
+      }
     }
   } else if (state.diaryMode === "month") {
     html += `
@@ -2607,6 +2750,24 @@ function copyShortCode() {
   copyText(document.getElementById("payShortCodeBtn").dataset.code || "");
 }
 
+function sharePayDetailsToChat() {
+  const club = state.payClub;
+  if (!club) return;
+  const shortCode = String(club.erip_code || "").replace(/^1000/, "");
+  const amt = Number(club.monthly_amount || club.last_to_pay || 0);
+  const lines = [
+    "💳 Реквизиты для оплаты в ЕРИП:",
+    `📌 Услуга: ${clubFriendlyTitle(club)} (${club.service_name || club.org_name})`,
+    `🔢 Код услуги ЕРИП: ${shortCode}`,
+  ];
+  if (amt > 0) {
+    lines.push(`💰 Сумма: ${fmtByn(amt)}${club.due_day ? ` (до ${club.due_day} числа)` : ""}`);
+  }
+  lines.push("");
+  lines.push("✨ Проверено в Dzetva — контроль школы и ЕРИП");
+  shareOrCopyText(lines.join("\n"), "Реквизиты скопированы для чата класса!", "Реквизиты для оплаты в ЕРИП");
+}
+
 function askDeleteClub(clubId, orgName) {
   document.getElementById("delConfirmText").textContent = `Убрать «${orgName}» из списка кружков? Прошлая статистика расходов при этом сохранится.`;
   document.getElementById("delConfirmYesBtn").onclick = async () => {
@@ -2687,15 +2848,43 @@ async function saveChild() {
 function openClubModal() {
   if (!state.children.length) return openChildModal();
   showFormErr("clubFormError", "");
+  state.selectedOrg = null;
+  state.selectedService = null;
+  state.inspectServices = [];
   const sel = document.getElementById("clubChildSelect");
   sel.innerHTML = state.children.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join("");
   if (state.selectedChildId) sel.value = state.selectedChildId;
   document.getElementById("clubSearchInput").value = "";
+  document.getElementById("clubDirectCodeInput").value = "";
+  document.getElementById("clubDirectCodeStatus").innerHTML = "";
+  document.getElementById("clubCustomOrgInput").value = "";
+  document.getElementById("clubKindSelect").value = "club";
   document.getElementById("clubAccInput").value = "";
+  document.getElementById("clubAmountInput").value = "";
+  document.getElementById("clubDueDayInput").value = "";
   document.getElementById("clubVerifyResult").innerHTML = "";
+  document.getElementById("clubServicePickerWrap").style.display = "none";
   document.getElementById("clubStepDetails").style.display = "none";
+  document.getElementById("clubSearchResults").innerHTML = `<div style="padding:14px;text-align:center;color:var(--muted);font-size:13px;">Загрузка списка...</div>`;
+  setClubSearchMode("search");
   openModal("modalClub");
   searchClubs(false);
+}
+
+function setClubSearchMode(mode) {
+  state.clubSearchMode = mode === "code" ? "code" : "search";
+  const isCode = state.clubSearchMode === "code";
+  document.getElementById("clubModeSearchBtn").classList.toggle("active", !isCode);
+  document.getElementById("clubModeCodeBtn").classList.toggle("active", isCode);
+  document.getElementById("clubSearchModeWrap").style.display = isCode ? "none" : "block";
+  document.getElementById("clubCodeModeWrap").style.display = isCode ? "block" : "none";
+  showFormErr("clubFormError", "");
+  if (isCode) {
+    const inp = document.getElementById("clubDirectCodeInput");
+    if (inp) setTimeout(() => inp.focus(), 60);
+  } else if (!state.searchItems.length) {
+    searchClubs(false);
+  }
 }
 
 function quickSearchClub(q) {
@@ -2704,24 +2893,67 @@ function quickSearchClub(q) {
 }
 
 let _st = null;
+let _searchSeq = 0;
 function debouncedClubSearch() { clearTimeout(_st); _st = setTimeout(() => searchClubs(false), 260); }
 
 async function searchClubs(force) {
+  const seq = ++_searchSeq;
   const q = document.getElementById("clubSearchInput").value.trim();
-  const data = await api(`/api/erip/search?q=${encodeURIComponent(q)}&force=${force ? "1" : "0"}`);
   const wrap = document.getElementById("clubSearchResults");
-  const items = data.items || [];
-  state.searchItems = items;
-  if (!items.length) {
-    wrap.innerHTML = `<div style="padding:14px;text-align:center;color:var(--muted);font-size:13px;">Ничего не найдено — попробуйте другое слово</div>`;
-    return;
+  try {
+    const data = await api(`/api/erip/search?q=${encodeURIComponent(q)}&force=${force ? "1" : "0"}`);
+    if (seq !== _searchSeq) return;
+    const items = data.items || [];
+    state.searchItems = items;
+    if (!items.length) {
+      wrap.innerHTML = `<div style="padding:14px;text-align:center;color:var(--muted);font-size:13px;">Ничего не найдено — попробуйте другое слово или вкладку «По коду ЕРИП»</div>`;
+      return;
+    }
+    wrap.innerHTML = items.map((it, idx) => `
+      <div class="search-opt" onclick="pickOrg(${idx})">
+        <div class="search-opt-name">${esc(it.name)}</div>
+        <div class="search-opt-cat">${esc(it.category)}</div>
+      </div>
+    `).join("");
+  } catch {
+    if (seq !== _searchSeq) return;
+    wrap.innerHTML = `<div style="padding:14px;text-align:center;color:var(--bad-text);font-size:13px;">Не удалось загрузить список</div>`;
   }
-  wrap.innerHTML = items.map((it, idx) => `
-    <div class="search-opt" onclick="pickOrg(${idx})">
-      <div class="search-opt-name">${esc(it.name)}</div>
-      <div class="search-opt-cat">${esc(it.category)}</div>
-    </div>
-  `).join("");
+}
+
+function guessClubKind(orgName, svcName) {
+  const txt = `${orgName || ""} ${svcName || ""}`.toLowerCase();
+  if (txt.includes("буфет")) return "buffet";
+  if (txt.includes("столов") || txt.includes("питани")) return "canteen";
+  return "club";
+}
+
+async function applyInspectedEripResult(data, org, labelSuffix = "") {
+  state.selectedOrg = org;
+  state.selectedService = null;
+  document.getElementById("clubSelectedOrgLabel").textContent = org.name + labelSuffix;
+  document.getElementById("clubVerifyResult").innerHTML = "";
+  document.getElementById("clubStepDetails").style.display = "block";
+  document.getElementById("clubCustomOrgInput").value = (org && org.name) || "";
+  document.getElementById("clubKindSelect").value = guessClubKind(org && org.name, "");
+
+  const svcWrap = document.getElementById("clubServicePickerWrap");
+  if (data.type === "list") {
+    state.inspectServices = data.services || [];
+    svcWrap.style.display = "block";
+    document.getElementById("clubServiceSelect").innerHTML = state.inspectServices
+      .map((s, i) => `<option value="${i}">${esc(s.name)}</option>`)
+      .join("");
+    await onSelectSubService();
+  } else {
+    svcWrap.style.display = "none";
+    state.selectedService = data.service;
+    document.getElementById("clubAccLabel").textContent =
+      "Шаг 3. " + ((data.service && data.service.field_name) || "Номер договора / ученика");
+    const defName = (org && org.name) || (state.selectedService && state.selectedService.name) || "";
+    document.getElementById("clubCustomOrgInput").value = defName;
+    document.getElementById("clubKindSelect").value = guessClubKind(defName, state.selectedService && state.selectedService.name);
+  }
 }
 
 async function pickOrg(idx) {
@@ -2729,22 +2961,15 @@ async function pickOrg(idx) {
   if (!org) return;
   showFormErr("clubFormError", "");
   state.selectedOrg = org;
+  state.selectedService = null;
   document.getElementById("clubSelectedOrgLabel").textContent = org.name;
+  document.getElementById("clubCustomOrgInput").value = org.name || "";
+  document.getElementById("clubKindSelect").value = guessClubKind(org.name, "");
   document.getElementById("clubVerifyResult").innerHTML = "";
   document.getElementById("clubStepDetails").style.display = "block";
   const data = await api(`/api/erip/inspect?code=${encodeURIComponent(org.code)}&di_type=${encodeURIComponent(org.di_type)}`);
   if (!data.ok) return showFormErr("clubFormError", data.error || "Не удалось открыть услугу в ЕРИП");
-  const svcWrap = document.getElementById("clubServicePickerWrap");
-  if (data.type === "list") {
-    state.inspectServices = data.services || [];
-    svcWrap.style.display = "block";
-    document.getElementById("clubServiceSelect").innerHTML = state.inspectServices.map((s, i) => `<option value="${i}">${esc(s.name)}</option>`).join("");
-    await onSelectSubService();
-  } else {
-    svcWrap.style.display = "none";
-    state.selectedService = data.service;
-    document.getElementById("clubAccLabel").textContent = "Шаг 3. " + (data.service.field_name || "Номер договора / ученика");
-  }
+  await applyInspectedEripResult(data, org);
 }
 
 async function onSelectSubService() {
@@ -2755,6 +2980,79 @@ async function onSelectSubService() {
   if (data.ok && data.type === "leaf") {
     state.selectedService = data.service;
     document.getElementById("clubAccLabel").textContent = "Шаг 3. " + (data.service.field_name || "Номер договора / ученика");
+    const customInp = document.getElementById("clubCustomOrgInput");
+    if (customInp && (!customInp.value.trim() || customInp.value.startsWith("Услуга ЕРИП "))) {
+      customInp.value = data.service.name || svc.name || "";
+    }
+    document.getElementById("clubKindSelect").value = guessClubKind(
+      state.selectedOrg && state.selectedOrg.name,
+      data.service.name
+    );
+  }
+}
+
+async function lookupByEripCode() {
+  showFormErr("clubFormError", "");
+  const inp = document.getElementById("clubDirectCodeInput");
+  const statusEl = document.getElementById("clubDirectCodeStatus");
+  const btn = document.getElementById("clubDirectCodeBtn");
+  const clean = (inp.value || "").replace(/\D/g, "");
+  if (!clean || clean.length < 4) {
+    statusEl.innerHTML = `<span style="color:var(--bad-text);font-weight:600;">Введите числовой код услуги ЕРИП</span>`;
+    inp.focus();
+    return;
+  }
+
+  const candidates = [];
+  if (/^(1000|1100)\d{6,}$/.test(clean)) {
+    candidates.push({ code: clean, di_type: clean.startsWith("1100") ? "9120" : "9191" });
+    candidates.push({ code: clean, di_type: clean.startsWith("1100") ? "9191" : "9120" });
+  } else {
+    const padded7 = clean.length < 7 ? clean.padStart(7, "0") : clean;
+    candidates.push({ code: "1000" + padded7, di_type: "9191" });
+    candidates.push({ code: clean, di_type: "9191" });
+    candidates.push({ code: "1100" + padded7, di_type: "9120" });
+  }
+
+  const prevLabel = btn ? btn.textContent : "Найти";
+  if (btn) { btn.disabled = true; btn.textContent = "Поиск…"; }
+  statusEl.innerHTML = `<span style="color:var(--muted);">Проверяем код в базе ЕРИП Беларуси…</span>`;
+
+  try {
+    let foundData = null;
+    let foundEntry = null;
+    let lastErr = "";
+    for (const cand of candidates) {
+      const data = await api(`/api/erip/inspect?code=${encodeURIComponent(cand.code)}&di_type=${encodeURIComponent(cand.di_type)}`);
+      if (data && data.ok) {
+        foundData = data;
+        foundEntry = cand;
+        break;
+      }
+      if (data && data.error) lastErr = data.error;
+    }
+
+    if (!foundData) {
+      statusEl.innerHTML = `<span style="color:var(--bad-text);font-weight:600;">${esc(lastErr || "Услуга с таким кодом не найдена в ЕРИП")}</span>`;
+      return;
+    }
+
+    const shortCode = clean.replace(/^(1000|1100)/, "");
+    const svcName = (foundData.type === "leaf" && foundData.service && foundData.service.name)
+      ? foundData.service.name
+      : "";
+    const org = {
+      code: foundEntry.code,
+      di_type: foundEntry.di_type,
+      name: svcName || `Услуга ЕРИП ${shortCode}`,
+      category: "Код ЕРИП (Беларусь)",
+    };
+    statusEl.innerHTML = `<span style="color:var(--ok-text);font-weight:600;">✓ Найдено: ${esc(org.name)} (код ${esc(shortCode)})</span>`;
+    await applyInspectedEripResult(foundData, org, ` · код ${shortCode}`);
+  } catch {
+    statusEl.innerHTML = `<span style="color:var(--bad-text);font-weight:600;">Ошибка связи с сервером</span>`;
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = prevLabel; }
   }
 }
 
@@ -2777,24 +3075,26 @@ async function verifyClubErip() {
 
 async function saveClub() {
   showFormErr("clubFormError", "");
-  if (!state.selectedOrg || !state.selectedService) return showFormErr("clubFormError", "Сначала выберите кружок из списка выше");
+  if (!state.selectedOrg || !state.selectedService) return showFormErr("clubFormError", "Сначала выберите кружок из списка или найдите по коду ЕРИП");
   const child_id = parseInt(document.getElementById("clubChildSelect").value);
   const account_number = document.getElementById("clubAccInput").value.trim();
   const monthly_amount = document.getElementById("clubAmountInput").value;
   const due_day = document.getElementById("clubDueDayInput").value;
+  const org_name = document.getElementById("clubCustomOrgInput").value.trim() || state.selectedOrg.name;
+  const kind = document.getElementById("clubKindSelect").value || "club";
   if (!account_number) return showFormErr("clubFormError", "Введите номер договора или ученика");
   const res = await api("/api/clubs", {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      child_id, org_name: state.selectedOrg.name, service_name: state.selectedService.name,
+      child_id, org_name, service_name: state.selectedService.name,
       erip_code: state.selectedService.code, di_type: state.selectedService.di_type,
-      account_number, monthly_amount, due_day,
+      account_number, kind, monthly_amount, due_day,
     }),
   });
   if (!res.ok) return showFormErr("clubFormError", res.error || "Ошибка сохранения");
   closeModal("modalClub");
   await loadBootstrap();
-  showToast("Кружок добавлен!");
+  showToast(kind === "canteen" ? "Столовая добавлена!" : (kind === "buffet" ? "Буфет добавлен!" : "Кружок добавлен!"));
 }
 
 function openExpenseModal() {

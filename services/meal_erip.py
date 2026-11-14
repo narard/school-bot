@@ -53,7 +53,26 @@ MINSK_KSHP_DISTRICTS: Dict[str, Dict[str, str]] = {
     "Центральный район": {"canteen": "10004436031", "buffet": "10005160021"},
 }
 
-DISTRICT_SHORT_KEYS: List[str] = list(MINSK_KSHP_DISTRICTS.keys())
+BELARUS_REGIONS: List[str] = [
+    "Брест и Брестская обл.",
+    "Витебск и Витебская обл.",
+    "Гомель и Гомельская обл.",
+    "Гродно и Гродненская обл.",
+    "Могилёв и Могилёвская обл.",
+    "Минская область",
+]
+
+DISTRICT_SHORT_KEYS: List[str] = list(MINSK_KSHP_DISTRICTS.keys()) + BELARUS_REGIONS
+
+
+def normalize_erip_code(raw_code: str) -> str:
+    """Normalize an ERIP service code (expand 4-8 digit short codes to internal 1000... format)."""
+    digits = re.sub(r"\D", "", str(raw_code or ""))
+    if not digits:
+        return ""
+    if 4 <= len(digits) <= 8 and not digits.startswith(("1000", "1100")):
+        return f"1000{digits}"
+    return digits
 
 
 def _parse_byn(raw: Optional[str]) -> Optional[float]:
@@ -121,7 +140,10 @@ def query_erip_service(
     timeout: int = 12,
 ) -> Dict[str, Any]:
     """Perform the standard two-step read-only ERIP inquiry without starting any payment."""
-    acc = account_number.strip()
+    pay_code = normalize_erip_code(pay_code)
+    if not pay_code:
+        return {"ok": False, "error": "Неверный код услуги ЕРИП"}
+    acc = str(account_number or "").strip()
     session = requests.Session()
     session.headers.update(ERIP_HEADERS)
 
@@ -405,30 +427,89 @@ def sync_minsk_clubs_catalog(force: bool = False) -> List[Dict[str, Any]]:
 
 
 def search_minsk_clubs(query: str, limit: int = 25) -> List[Dict[str, Any]]:
-    """Search cached Minsk ERIP clubs catalog by substring tokens."""
+    """Search cached Minsk ERIP clubs catalog by substring tokens or direct ERIP service code."""
     catalog = sync_minsk_clubs_catalog(force=False)
-    q = (query or "").strip().lower()
+    raw_q = (query or "").strip()
+    q = raw_q.lower()
     if not q:
         return catalog[:limit]
+
+    hits: List[Dict[str, Any]] = []
+    seen_codes = set()
+
+    digits = re.sub(r"\D", "", raw_q)
+    if raw_q.replace(" ", "").isdigit() and 4 <= len(digits) <= 12:
+        res = inspect_erip_entry(digits, "9191")
+        if res.get("ok") and res.get("type") == "leaf":
+            svc = res["service"]
+            hits.append(
+                {
+                    "code": svc["code"],
+                    "di_type": svc["di_type"],
+                    "name": svc["name"],
+                    "category": "По коду услуги ЕРИП (вся Беларусь)",
+                    "is_leaf": True,
+                }
+            )
+            seen_codes.add(svc["code"])
+
     tokens = [t for t in re.split(r"\s+", q) if t]
-    hits = []
     for item in catalog:
+        if len(hits) >= limit:
+            break
+        code_val = item.get("code")
+        if code_val and code_val in seen_codes:
+            continue
         hay = f"{item.get('name', '')} {item.get('category', '')}".lower()
         if all(tok in hay for tok in tokens):
             hits.append(item)
-            if len(hits) >= limit:
-                break
-    return hits
+            if code_val:
+                seen_codes.add(code_val)
+    return hits[:limit]
 
 
 def inspect_erip_entry(code: str, di_type: str = "9120") -> Dict[str, Any]:
     """Inspect a selected ERIP organization or leaf service to discover services and required input field."""
+    raw_digits = re.sub(r"\D", "", str(code or ""))
+    norm_code = normalize_erip_code(raw_digits)
+    if not raw_digits and not str(code or "").strip():
+        return {"ok": False, "error": "Неверный код услуги ЕРИП"}
+
     session = requests.Session()
     session.headers.update(ERIP_HEADERS)
-    try:
-        pr = _post_pay_list(session, code, di_type)
-    except Exception as e:
-        return {"ok": False, "error": f"Ошибка ЕРИП: {e}"}
+    pr = None
+    last_error: Optional[Exception] = None
+
+    def _try_post(target_code: str, target_di_type: str) -> Any:
+        nonlocal last_error
+        if not target_code:
+            return None
+        try:
+            res = _post_pay_list(session, target_code, target_di_type)
+            if isinstance(res, (dict, list)):
+                return res
+        except Exception as e:
+            last_error = e
+        return None
+
+    prefer_leaf = (
+        str(di_type) == "9191"
+        or (bool(norm_code) and norm_code != raw_digits)
+        or raw_digits.startswith("1000")
+    )
+
+    if prefer_leaf:
+        pr = _try_post(norm_code or str(code), "9191")
+        if pr is None:
+            fallback_dt = "9120" if str(di_type) == "9191" else str(di_type or "9120")
+            pr = _try_post(raw_digits or str(code), fallback_dt)
+    else:
+        pr = _try_post(raw_digits or str(code), str(di_type or "9120"))
+        if pr is None and norm_code:
+            pr = _try_post(norm_code, "9191")
+
+    if pr is None and last_error is not None:
+        return {"ok": False, "error": f"Ошибка ЕРИП: {last_error}"}
 
     if isinstance(pr, list):
         services = [
@@ -449,11 +530,13 @@ def inspect_erip_entry(code: str, di_type: str = "9120") -> Dict[str, Any]:
         editable = [a for a in attrs if str(a.get("edit", "0")) == "1"]
         field_name = editable[0].get("name") if editable else "Лицевой счёт / договор"
         hint = editable[0].get("hint") or pr.get("information") or ""
+        svc_code = str(pr.get("code") or norm_code or code)
         return {
             "ok": True,
             "type": "leaf",
             "service": {
-                "code": str(pr.get("code", code)),
+                "code": svc_code,
+                "short_code": re.sub(r"^1000", "", svc_code),
                 "di_type": str(pr.get("di_type", "9191")),
                 "name": str(pr.get("name", "Услуга")),
                 "field_name": field_name,

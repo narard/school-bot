@@ -449,7 +449,10 @@ def attach_school_erip_pack(tg_id: int, child_id: int, account_number: str, dist
     """Ensure Canteen, Buffet, and School UO Clubs entries exist for a child's 10-digit ERIP number."""
     from services.meal_erip import MINSK_KSHP_DISTRICTS, MINSK_UO_SCHOOL_CLUBS
 
-    kshp = MINSK_KSHP_DISTRICTS.get(district) or MINSK_KSHP_DISTRICTS["Фрунзенский район"]
+    if district not in MINSK_KSHP_DISTRICTS:
+        return
+
+    kshp = MINSK_KSHP_DISTRICTS[district]
     uo_club = MINSK_UO_SCHOOL_CLUBS.get(district) or MINSK_UO_SCHOOL_CLUBS["Фрунзенский район"]
     pack = [
         ("canteen", "КШП Столовая", "Питание", kshp["canteen"]),
@@ -688,6 +691,16 @@ def confirm_club_payment(tg_id: int, club_id: int, amount: Optional[float], date
             )
         conn.commit()
         return dict(club)
+
+
+def get_club_alert_tag(club_id: int) -> Optional[str]:
+    """Return the last_reminded_tag stored for a club/account."""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT last_reminded_tag FROM child_clubs WHERE id = ?",
+            (club_id,),
+        ).fetchone()
+        return row["last_reminded_tag"] if row else None
 
 
 def mark_club_reminded(club_id: int, tag: str):

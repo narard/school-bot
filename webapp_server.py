@@ -16,6 +16,7 @@ from schools_client import SchoolsClient
 from services.meal_erip import (
     DISTRICT_SHORT_KEYS,
     inspect_erip_entry,
+    normalize_erip_code,
     query_erip_service,
     search_minsk_clubs,
     sync_minsk_clubs_catalog,
@@ -209,19 +210,21 @@ async def api_erip_search(request: web.Request) -> web.Response:
 
 
 async def api_erip_inspect(request: web.Request) -> web.Response:
-    code = request.query.get("code", "")
+    raw_code = request.query.get("code", "").strip()
     di_type = request.query.get("di_type", "9120")
-    if not code:
+    norm_code = normalize_erip_code(raw_code)
+    if not norm_code:
         return web.json_response({"ok": False, "error": "Нет code"}, status=400)
+    code = norm_code if di_type == "9191" else raw_code
     res = await asyncio.to_thread(inspect_erip_entry, code, di_type)
     return web.json_response(res)
 
 
 async def api_erip_verify(request: web.Request) -> web.Response:
     data = await request.json()
-    code = str(data.get("code", ""))
-    di_type = str(data.get("di_type", "9191"))
-    acc = str(data.get("account_number", "")).strip()
+    code = normalize_erip_code(data.get("code"))
+    di_type = str(data.get("di_type") or "9191").strip()
+    acc = str(data.get("account_number") or "").strip()
     if not code or not acc:
         return web.json_response({"ok": False, "error": "Введите код услуги и номер счёта/договора"}, status=400)
     res = await asyncio.to_thread(query_erip_service, code, acc, di_type)
@@ -234,9 +237,12 @@ async def api_add_club(request: web.Request) -> web.Response:
     child_id = int(data["child_id"])
     org_name = (data.get("org_name") or "").strip()
     service_name = (data.get("service_name") or "Кружок").strip()
-    erip_code = str(data.get("erip_code") or "").strip()
+    erip_code = normalize_erip_code(data.get("erip_code"))
     di_type = str(data.get("di_type") or "9191").strip()
     account_number = str(data.get("account_number") or "").strip()
+    kind = str(data.get("kind") or "club").strip()
+    if kind not in ("club", "canteen", "buffet", "school_club"):
+        kind = "club"
     monthly_amount = data.get("monthly_amount")
     due_day = data.get("due_day")
 
@@ -255,7 +261,7 @@ async def api_add_club(request: web.Request) -> web.Response:
         erip_code=erip_code,
         di_type=di_type,
         account_number=account_number,
-        kind=data.get("kind") or "club",
+        kind=kind,
         monthly_amount=float(monthly_amount) if monthly_amount not in (None, "", 0, "0") else None,
         due_day=int(due_day) if due_day not in (None, "", 0, "0") else None,
         alert_threshold=float(data.get("alert_threshold") or 5.0),

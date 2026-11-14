@@ -1,3 +1,4 @@
+import html
 import os
 import re
 import sys
@@ -497,8 +498,8 @@ HELP_TEXT = (
     "• <b>📱 Dzetva</b> (<code>/app</code>): отдельное мобильное веб-приложение с учёбой, балансами ЕРИП, кружками и аналитикой.\n\n"
     "⚡️ <b>БЫСТРЫЕ КОМАНДЫ:</b>\n"
     "• <code>/0</code> — Сегодня • <code>/1</code> — Завтра • <code>/7</code> — Неделя • <code>/m</code> — Оценки\n"
-    "• <code>/meal</code> — Балансы ЕРИП • <code>/expenses</code> — Расходы • <code>/app</code> — Открыть Dzetva\n"
-    "• <code>/bind</code> — Привязать семейный чат"
+    "• <code>/meal</code> — Балансы ЕРИП • <code>/check_alerts</code> — Проверить алерты\n"
+    "• <code>/expenses</code> — Расходы • <code>/app</code> — Открыть Dzetva • <code>/bind</code> — Семейный чат"
 )
 
 
@@ -770,6 +771,49 @@ def handle_meal_add_cmd(message: types.Message):
     _save_and_show_meal_account(message.chat.id, user["tg_id"], acc, label, district="Фрунзенский район")
 
 
+@bot.message_handler(commands=["check_alerts"])
+def handle_check_alerts(message: types.Message):
+    user = resolve_user_context(message)
+    if not user:
+        bot.send_message(message.chat.id, "Сначала выполните вход: /start")
+        return
+
+    clubs = db.get_child_clubs(user["tg_id"])
+    if not clubs:
+        bot.send_message(
+            message.chat.id,
+            "🔔 У вас пока нет привязанных счетов питания или кружков в <b>Dzetva</b>.\n"
+            "Добавьте профиль ребёнка и счета в приложении (/app) или через /meal.",
+        )
+        return
+
+    wait_msg = bot.send_message(message.chat.id, "⏳ Проверяю счета в ЕРИП и условия уведомлений...")
+    today_str = date.today().isoformat()
+    stats = check_and_send_erip_alerts_for_user(user, today_str, force_refresh=True)
+
+    err_suffix = f" (ошибок: {stats['errors']})" if stats["errors"] else ""
+    alert_breakdown = (
+        f" (низкий баланс: {stats['low_alerts']}, кружки: {stats['due_alerts']})"
+        if stats["alerts_sent"]
+        else ""
+    )
+    lines = [
+        "🔔 <b>Проверка уведомлений Dzetva завершена</b>\n",
+        f"📋 Проверено счетов: <b>{stats['checked']}</b>",
+        f"🔄 Обновлено в ЕРИП: <b>{stats['refreshed']}</b>{err_suffix}",
+        f"📨 Отправлено уведомлений: <b>{stats['alerts_sent']}</b>{alert_breakdown}",
+    ]
+    if stats.get("details"):
+        lines.append("\n<b>Состояние счетов:</b>")
+        lines.extend(stats["details"])
+
+    summary_text = "\n".join(lines)
+    try:
+        bot.edit_message_text(summary_text, message.chat.id, wait_msg.message_id)
+    except Exception:
+        bot.send_message(message.chat.id, summary_text)
+
+
 @bot.callback_query_handler(func=lambda c: c.data == "meal_manage")
 def callback_meal_manage(call: types.CallbackQuery):
     user = resolve_callback_user(call)
@@ -943,6 +987,199 @@ def callback_club_paid(call: types.CallbackQuery):
 
 # ================= NOTIFIER BACKGROUND WORKER =================
 
+
+def _build_club_due_trigger(
+    now_date: date,
+    month_key: str,
+    due_day: Any,
+) -> Tuple[Optional[str], str]:
+    """Return (dedup_tag, human_when_text) for a club's payment schedule."""
+    try:
+        due_day_int = int(due_day)
+    except (TypeError, ValueError):
+        return None, ""
+    if due_day_int <= 0:
+        return None, ""
+
+    max_d = calendar.monthrange(now_date.year, now_date.month)[1]
+    due_dt = now_date.replace(day=min(due_day_int, max_d))
+    days_left = (due_dt - now_date).days
+    due_label = due_dt.strftime("%d.%m")
+
+    if days_left == 0:
+        return f"{month_key}:d0", "ПОСЛЕДНИЙ ДЕНЬ сегодня!"
+    if days_left == 1:
+        return f"{month_key}:d1", "остался 1 день (завтра срок)!"
+    if days_left == 2:
+        return f"{month_key}:d2", f"осталось 2 дня (до {due_label})"
+    if days_left == 5:
+        return f"{month_key}:d5", f"осталось 5 дней (до {due_label})"
+    if days_left == -1:
+        return f"{month_key}:overdue1", f"просрочка 1 день — срок был {due_label}"
+    if now_date.day == 1:
+        return f"{month_key}:start", f"начало месяца (срок до {due_label})"
+    return None, ""
+
+
+def check_and_send_erip_alerts_for_user(
+    u: Dict[str, Any],
+    today_str: str,
+    force_refresh: bool = False,
+) -> Dict[str, Any]:
+    """Check a user's child_clubs balances/deadlines and send deduplicated Dzetva alerts."""
+    stats: Dict[str, Any] = {
+        "checked": 0,
+        "refreshed": 0,
+        "errors": 0,
+        "low_alerts": 0,
+        "due_alerts": 0,
+        "alerts_sent": 0,
+        "details": [],
+    }
+    clubs = db.get_child_clubs(u["tg_id"])
+    if not clubs:
+        return stats
+
+    now_date = date.fromisoformat(today_str)
+    month_key = today_str[:7]
+    children_map = {c["id"]: c["name"] for c in db.ensure_children_synced(u["tg_id"])}
+    target_chats = db.get_all_target_chat_ids_for_user(u["tg_id"])
+
+    for club in clubs:
+        stats["checked"] += 1
+        child_name = children_map.get(club["child_id"], "Ученик")
+        safe_child = html.escape(str(child_name))
+        org_name = str(club.get("org_name") or "Счёт")
+        safe_org = html.escape(org_name)
+
+        balance: Optional[float] = None
+        to_pay: Optional[float] = club.get("last_to_pay")
+        erip_error: Optional[str] = None
+
+        if force_refresh or club.get("last_checked") != today_str:
+            try:
+                res = query_erip_service(
+                    club["erip_code"],
+                    club["account_number"],
+                    club.get("di_type") or "9191",
+                )
+            except Exception as e:
+                logger.warning(f"ERIP query error for club {club.get('id')}: {e}")
+                res = {"ok": False, "error": str(e)}
+
+            if res.get("ok"):
+                db.update_club_erip_state(
+                    tg_id=u["tg_id"],
+                    club_id=club["id"],
+                    fio=res.get("fio", ""),
+                    balance=res.get("balance"),
+                    to_pay=res.get("to_pay"),
+                    snap_date=today_str,
+                    saldo_start=res.get("saldo_start"),
+                    paid_period=res.get("paid_period"),
+                )
+                balance = res.get("balance")
+                to_pay = res.get("to_pay")
+                stats["refreshed"] += 1
+            else:
+                erip_error = res.get("error") or "Ошибка ЕРИП"
+                stats["errors"] += 1
+        else:
+            balance = club.get("last_balance")
+            to_pay = club.get("last_to_pay")
+
+        kind = club.get("kind")
+        raw_thr = club.get("alert_threshold")
+        thr = float(raw_thr) if raw_thr not in (None, "") else 5.0
+
+        # Низкий баланс питания (столовая / буфет)
+        if kind in ("canteen", "buffet") and balance is not None and thr > 0 and balance <= thr:
+            low_tag = f"low:{today_str}"
+            if club.get("last_reminded_tag") != low_tag:
+                svc_title = "🥗 КШП Столовая" if kind == "canteen" else "🥐 КШП Буфет"
+                bal_str = f"{float(balance):.2f}".replace(".", ",")
+                thr_str = f"{thr:.2f}".replace(".", ",")
+                short_code = re.sub(r"^1000", "", str(club.get("erip_code") or ""))
+                safe_acc = html.escape(str(club.get("account_number") or ""))
+                safe_code = html.escape(short_code)
+                code_line = f"🔢 Код услуги ЕРИП: <code>{safe_code}</code>\n" if safe_code else ""
+                alert = (
+                    f"⚠️ <b>Dzetva: заканчиваются средства на питание!</b>\n\n"
+                    f"👤 <b>{safe_child}</b>\n"
+                    f"{svc_title}\n"
+                    f"💳 Остаток: <b>{bal_str} BYN</b> (порог: {thr_str} BYN)\n"
+                    f"📄 Лицевой счёт: <code>{safe_acc}</code>\n"
+                    f"{code_line}\n"
+                    f"<i>Пополните счёт в ЕРИП или откройте /meal для подробностей.</i>"
+                )
+                sent_count = 0
+                for cid in target_chats:
+                    try:
+                        bot.send_message(cid, alert)
+                        sent_count += 1
+                    except Exception as e:
+                        logger.warning(f"Failed to send low-balance alert to {cid}: {e}")
+                db.mark_club_reminded(club["id"], low_tag)
+                if sent_count > 0:
+                    stats["low_alerts"] += 1
+                    stats["alerts_sent"] += 1
+
+        # Напоминания для кружков с датой оплаты
+        due_day = club.get("due_day")
+        if due_day and club.get("last_paid_month") != month_key:
+            tag, when_txt = _build_club_due_trigger(now_date, month_key, due_day)
+            if tag and db.get_club_alert_tag(club["id"]) != tag:
+                amt = club.get("monthly_amount") or to_pay
+                amt_txt = f" • Сумма: <b>{float(amt):.2f} BYN</b>".replace(".", ",") if amt else ""
+                service_name = html.escape(str(club.get("service_name") or ""))
+                svc_suffix = f" ({service_name})" if service_name else ""
+                safe_acc = html.escape(str(club.get("account_number") or ""))
+                alert = (
+                    f"💳 <b>Напоминание об оплате кружка</b>\n\n"
+                    f"👤 <b>{safe_child}</b>\n"
+                    f"🤖 <b>{safe_org}</b>{svc_suffix}\n"
+                    f"📄 Счёт/договор: <code>{safe_acc}</code>{amt_txt}\n"
+                    f"⏰ Срок: <b>{when_txt}</b>"
+                )
+                kb = types.InlineKeyboardMarkup()
+                btn_lbl = (
+                    f"✅ Оплатил ({float(amt):.2f} BYN)".replace(".", ",")
+                    if amt
+                    else "✅ Оплатил в этом месяце"
+                )
+                kb.add(types.InlineKeyboardButton(btn_lbl, callback_data=f"club_paid:{club['id']}"))
+                sent_count = 0
+                for cid in target_chats:
+                    try:
+                        bot.send_message(cid, alert, reply_markup=kb)
+                        sent_count += 1
+                    except Exception as e:
+                        logger.warning(f"Failed to send club payment alert to {cid}: {e}")
+                db.mark_club_reminded(club["id"], tag)
+                if sent_count > 0:
+                    stats["due_alerts"] += 1
+                    stats["alerts_sent"] += 1
+
+        if erip_error:
+            stats["details"].append(f"• {safe_child} — {safe_org}: ⚠️ <i>{html.escape(str(erip_error))}</i>")
+        elif balance is not None:
+            bal_s = f"{float(balance):.2f} BYN".replace(".", ",")
+            mark = "⚠️ " if (kind in ("canteen", "buffet") and thr > 0 and balance <= thr) else ""
+            stats["details"].append(f"• {safe_child} — {safe_org}: {mark}<b>{bal_s}</b>")
+        elif club.get("last_paid_month") == month_key:
+            stats["details"].append(f"• {safe_child} — {safe_org}: ✅ оплачено")
+        elif to_pay is not None:
+            tp_s = f"{float(to_pay):.2f} BYN".replace(".", ",")
+            stats["details"].append(f"• {safe_child} — {safe_org}: к оплате <b>{tp_s}</b>")
+        elif club.get("monthly_amount"):
+            ma_s = f"{float(club['monthly_amount']):.2f} BYN".replace(".", ",")
+            stats["details"].append(f"• {safe_child} — {safe_org}: абон. {ma_s}")
+        else:
+            stats["details"].append(f"• {safe_child} — {safe_org}: проверено")
+
+    return stats
+
+
 def notifier_loop():
     logger.info("Background Notifier thread started on Mi Box!")
     last_grades_check = 0
@@ -1102,64 +1339,13 @@ def notifier_loop():
 
             # 6. Синхронизация кружков/счетов и напоминания об оплате в 10:00 и 18:10
             if (now.hour == 10 and now.minute < 25) or (now.hour == 18 and 5 <= now.minute < 30):
-                month_key = now.strftime("%Y-%m")
                 for u in users:
                     if not u.get("notify_new_grades", 1):
                         continue
-                    children_map = {c["id"]: c["name"] for c in db.ensure_children_synced(u["tg_id"])}
-                    target_chats = db.get_all_target_chat_ids_for_user(u["tg_id"])
-                    for club in db.get_child_clubs(u["tg_id"]):
-                        # Обновляем снимок баланса из ЕРИП раз в день (чтобы копилась статистика)
-                        if club.get("last_checked") != today_str:
-                            res = query_erip_service(club["erip_code"], club["account_number"], club.get("di_type") or "9191")
-                            if res.get("ok"):
-                                db.update_club_erip_state(
-                                    tg_id=u["tg_id"],
-                                    club_id=club["id"],
-                                    fio=res.get("fio", ""),
-                                    balance=res.get("balance"),
-                                    to_pay=res.get("to_pay"),
-                                    snap_date=today_str,
-                                    saldo_start=res.get("saldo_start"),
-                                    paid_period=res.get("paid_period"),
-                                )
-                        # Напоминания для кружков с датой оплаты (1-го числа, за 5 дней, за 1 день)
-                        due_day = club.get("due_day")
-                        if not due_day or club.get("last_paid_month") == month_key:
-                            continue
-                        max_d = calendar.monthrange(now.year, now.month)[1]
-                        due_dt = now.date().replace(day=min(int(due_day), max_d))
-                        days_left = (due_dt - now.date()).days
-                        tag = None
-                        if now.day == 1:
-                            tag = f"{month_key}:start"
-                            when_txt = f"начало месяца (срок до {due_dt.strftime('%d.%m')})"
-                        elif days_left == 5:
-                            tag = f"{month_key}:d5"
-                            when_txt = f"осталось 5 дней (до {due_dt.strftime('%d.%m')})"
-                        elif days_left in (0, 1):
-                            tag = f"{month_key}:d{days_left}"
-                            when_txt = "ПОСЛЕДНИЙ ДЕНЬ сегодня!" if days_left == 0 else "остался 1 день (завтра срок)!"
-                        if tag and club.get("last_reminded_tag") != tag:
-                            amt = club.get("monthly_amount") or club.get("last_to_pay")
-                            amt_txt = f" • Сумма: <b>{float(amt):.2f} BYN</b>".replace(".", ",") if amt else ""
-                            child_name = children_map.get(club["child_id"], "Ученик")
-                            alert = (
-                                f"💳 <b>Напоминание об оплате кружка</b>\n\n"
-                                f"👤 <b>{child_name}</b>\n"
-                                f"🤖 <b>{club['org_name']}</b> ({club['service_name']})\n"
-                                f"📄 Счёт/договор: <code>{club['account_number']}</code>{amt_txt}\n"
-                                f"⏰ Срок: <b>{when_txt}</b>"
-                            )
-                            kb = types.InlineKeyboardMarkup()
-                            btn_lbl = f"✅ Оплатил ({float(amt):.2f} BYN)".replace(".", ",") if amt else "✅ Оплатил в этом месяце"
-                            kb.add(types.InlineKeyboardButton(btn_lbl, callback_data=f"club_paid:{club['id']}"))
-                            for cid in target_chats:
-                                try:
-                                    bot.send_message(cid, alert, reply_markup=kb)
-                                except Exception:
-                                    pass
-                            db.mark_club_reminded(club["id"], tag)
+                    try:
+                        check_and_send_erip_alerts_for_user(u, today_str)
+                    except Exception as e:
+                        logger.error(f"Error checking ERIP alerts for user {u.get('tg_id')}: {e}")
 
         except Exception as e:
             logger.error(f"Error in background notifier loop: {e}")
