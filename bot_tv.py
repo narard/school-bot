@@ -36,18 +36,32 @@ BOT_TOKEN = "8637861449:AAHFx0rVKG7kGWj9nWTUeFF25fPXgTeMHkc"
 bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML")
 
 
+def _normalize_webapp_app_url(url: str) -> Tuple[str, str]:
+    """Split a WebApp URL into (base_root, app_url) ensuring app_url ends with /app."""
+    clean = (url or "").strip().rstrip("/")
+    if not clean:
+        return "", ""
+    if clean.endswith("/app"):
+        base_root = clean[:-4].rstrip("/")
+        return base_root, f"{base_root}/app"
+    return clean, f"{clean}/app"
+
+
 def update_bot_webapp_menu_button(url: str):
     """Set the Telegram chat menu button to launch Dzetva Mini App via HTTPS."""
     if not url or not url.startswith("https://"):
+        return
+    _, app_url = _normalize_webapp_app_url(url)
+    if not app_url.startswith("https://"):
         return
     try:
         bot.set_chat_menu_button(
             menu_button=types.MenuButtonWebApp(
                 text="📱 Dzetva",
-                web_app=types.WebAppInfo(url=url),
+                web_app=types.WebAppInfo(url=app_url),
             )
         )
-        logger.info(f"Bot WebApp menu button updated: {url}")
+        logger.info(f"Bot WebApp menu button updated: {app_url}")
     except Exception as e:
         logger.warning(f"Failed to update WebApp menu button: {e}")
 
@@ -273,7 +287,8 @@ def handle_start(message: types.Message):
     user_id = message.from_user.id
     existing_user = db.get_user(user_id)
     url = tunnel_manager.get_public_webapp_url()
-    personal_url = f"{url.rstrip('/')}/?uid={user_id}"
+    _, app_url = _normalize_webapp_app_url(url)
+    personal_url = f"{app_url}?uid={user_id}"
 
     if not existing_user or not existing_user.get("login"):
         db.ensure_basic_user(user_id, message.from_user.first_name or "")
@@ -286,7 +301,7 @@ def handle_start(message: types.Message):
         )
 
         inline_kb = types.InlineKeyboardMarkup(row_width=1)
-        if url.startswith("https://"):
+        if app_url.startswith("https://"):
             inline_kb.add(
                 types.InlineKeyboardButton(
                     "📱 Открыть Dzetva (ЕРИП и кружки)",
@@ -328,7 +343,7 @@ def handle_start(message: types.Message):
         f"📱 <i>Для питания ЕРИП, кружков и расходов также используйте кнопку <b>📱 Dzetva</b> или /app.</i>",
         reply_markup=get_main_keyboard(has_multi),
     )
-    if url.startswith("https://"):
+    if app_url.startswith("https://"):
         app_kb = types.InlineKeyboardMarkup()
         app_kb.add(
             types.InlineKeyboardButton(
@@ -709,12 +724,14 @@ def handle_help(message: types.Message):
 @bot.message_handler(func=lambda m: m.text and ("dzetva" in m.text.lower() or "школьный пульт" in m.text.lower() or "📱" in m.text))
 def handle_open_app(message: types.Message):
     url = tunnel_manager.get_public_webapp_url()
+    base_root, app_url = _normalize_webapp_app_url(url)
     uid = message.from_user.id
-    personal_url = f"{url.rstrip('/')}/?uid={uid}"
-    local_url = f"http://192.168.1.35:8080/?uid={uid}"
+    personal_url = f"{app_url}?uid={uid}"
+    local_url = f"http://192.168.1.35:8080/app?uid={uid}"
+    site_url = base_root if "dzetva.by" in base_root.lower() else "https://dzetva.by"
 
     markup = None
-    if url.startswith("https://"):
+    if app_url.startswith("https://"):
         markup = types.InlineKeyboardMarkup(row_width=1)
         if message.chat.type == "private":
             markup.add(
@@ -729,8 +746,9 @@ def handle_open_app(message: types.Message):
             f"📱 <b>Dzetva — веб-приложение</b>\n\n"
             f"Нажмите «<b>📱 Открыть Dzetva в Telegram</b>», чтобы запустить <b>Telegram Mini App</b> прямо внутри Telegram "
             f"(работает с любого интернета и мобильной сети).\n\n"
-            f"🌐 Ссылка для браузера:\n<code>{html.escape(personal_url)}</code>\n\n"
-            f"🏠 Локальный Wi-Fi (в одной сети с приставкой): <code>http://192.168.1.35:8080</code> "
+            f"🌐 Ссылка для браузера:\n<code>{html.escape(personal_url)}</code>\n"
+            f"🌍 Сайт проекта: {html.escape(site_url)}\n\n"
+            f"🏠 Локальный Wi-Fi (в одной сети с приставкой): <code>http://192.168.1.35:8080/app</code> "
             f"(<code>{html.escape(local_url)}</code>)\n\n"
             f"💡 <i>В браузере телефона можно нажать «Поделиться / Меню» → «На экран Домой», чтобы установить как приложение.</i>"
         )
@@ -739,11 +757,12 @@ def handle_open_app(message: types.Message):
             f"📱 <b>Dzetva — веб-приложение</b>\n\n"
             f"Публичный HTTPS-туннель сейчас не активен, поэтому приложение открывается по локальному Wi-Fi (в одной сети с сервером):\n"
             f"👉 <code>{html.escape(personal_url)}</code>\n\n"
-            f"🏠 Адрес домашнего сервера: <code>http://192.168.1.35:8080</code>\n\n"
+            f"🏠 Адрес домашнего сервера: <code>http://192.168.1.35:8080/app</code>\n"
+            f"🌍 Сайт проекта: {html.escape(site_url)}\n\n"
             f"💡 <i>Когда активен HTTPS-туннель (или задан WEBAPP_PUBLIC_URL), здесь появится кнопка для Telegram Mini App из любой точки мира.</i>"
         )
 
-    bot.send_message(message.chat.id, text, reply_markup=markup)
+    bot.send_message(message.chat.id, text, reply_markup=markup, disable_web_page_preview=True)
 
 
 @bot.message_handler(commands=["expenses", "spend"])

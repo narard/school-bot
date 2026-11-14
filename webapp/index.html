@@ -1722,12 +1722,47 @@ function showFormErr(id, msg) {
   if (!msg) { el.style.display = "none"; el.textContent = ""; }
   else { el.textContent = msg; el.style.display = "block"; }
 }
+function resolveBrowserUid() {
+  const params = new URLSearchParams(location.search);
+  const hasTgInitData = Boolean(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData);
+  const host = (location.hostname || "").toLowerCase();
+  const isPublicHost = host.endsWith("dzetva.by") || host.endsWith(".lhr.life") || host.endsWith(".trycloudflare.com") || host.includes("ngrok") || params.get("public") === "1";
+
+  if (params.get("reset_uid") === "1" && !window._dzetvaUidResetDone) {
+    window._dzetvaUidResetDone = true;
+    try { localStorage.removeItem("dzetva_uid"); } catch {}
+    delete window._dzetvaFallbackUid;
+  }
+
+  const qUid = (params.get("uid") || "").trim();
+  if (/^\d+$/.test(qUid) && Number(qUid) > 0) {
+    if (isPublicHost) {
+      try { localStorage.setItem("dzetva_uid", qUid); } catch {}
+    }
+    return qUid;
+  }
+
+  if (hasTgInitData) return "";
+  if (!isPublicHost) return "";
+
+  let uid = "";
+  try {
+    uid = (localStorage.getItem("dzetva_uid") || "").trim();
+  } catch {}
+  if (!/^\d+$/.test(uid) || Number(uid) <= 0) {
+    uid = window._dzetvaFallbackUid || ("88" + String(Math.floor(10000000 + Math.random() * 89999999)));
+    window._dzetvaFallbackUid = uid;
+    try { localStorage.setItem("dzetva_uid", uid); } catch {}
+  }
+  return uid;
+}
+
 async function api(url, opts = {}) {
   const headers = Object.assign({}, opts.headers || {});
   const tgInitData = window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData;
   if (tgInitData) headers["X-Telegram-Init-Data"] = tgInitData;
-  const pageUid = new URLSearchParams(location.search).get("uid");
-  if (pageUid) headers["X-User-Uid"] = pageUid;
+  const browserUid = resolveBrowserUid();
+  if (browserUid) headers["X-User-Uid"] = browserUid;
   const res = await fetch(url, Object.assign({}, opts, { headers }));
   return await res.json();
 }
@@ -2453,7 +2488,7 @@ function shareDiaryToChat() {
   }
 
   lines.push("");
-  lines.push("✨ Собрано в Dzetva — школьный помощник (Расписание и ЕРИП)");
+  lines.push("✨ Собрано в Dzetva (dzetva.by) — школьный дневник и ЕРИП");
   shareOrCopyText(
     lines.join("\n"),
     "Скопировано для чата класса! Отправьте в Viber или Telegram",
@@ -2884,7 +2919,7 @@ function sharePayDetailsToChat() {
     lines.push(`💰 Сумма: ${fmtByn(amt)}${club.due_day ? ` (до ${club.due_day} числа)` : ""}`);
   }
   lines.push("");
-  lines.push("✨ Проверено в Dzetva — контроль школы и ЕРИП");
+  lines.push("✨ Проверено в Dzetva (dzetva.by) — контроль школы и ЕРИП");
   shareOrCopyText(lines.join("\n"), "Реквизиты скопированы для чата класса!", "Реквизиты для оплаты в ЕРИП");
 }
 

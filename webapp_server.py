@@ -128,8 +128,26 @@ def verify_telegram_init_data(init_data_raw: str) -> Optional[Dict[str, Any]]:
         return None
 
 
+GUEST_TG_ID = 900000001
+_PUBLIC_HOST_MARKERS = ("dzetva.by", ".lhr.life", "trycloudflare.com", "ngrok")
+_LOCAL_HOST_PREFIXES = ("127.0.0.1", "localhost", "192.168.", "10.", "[::1]", "::1")
+
+
+def _is_public_request(request: web.Request) -> bool:
+    """Return True when request arrives through a public domain/tunnel or explicit public flag."""
+    if request.query.get("public") == "1" or request.headers.get("X-Dzetva-Public") == "1":
+        return True
+    forwarded_host = (request.headers.get("X-Forwarded-Host") or "").strip()
+    host_val = (forwarded_host or request.host or "").strip().lower()
+    if any(marker in host_val for marker in _PUBLIC_HOST_MARKERS):
+        return True
+    if not host_val or host_val.startswith(_LOCAL_HOST_PREFIXES):
+        return False
+    return False
+
+
 def _resolve_tg_id(request: Optional[web.Request] = None) -> int:
-    if request:
+    if request is not None:
         init_data = (
             request.headers.get("X-Telegram-Init-Data")
             or request.query.get("init_data")
@@ -146,10 +164,15 @@ def _resolve_tg_id(request: Optional[web.Request] = None) -> int:
             or request.headers.get("X-User-Uid")
             or ""
         ).strip()
-        if q_uid.isdigit() and int(q_uid) > 0:
+        if q_uid.isascii() and q_uid.isdigit():
             uid = int(q_uid)
-            db.ensure_basic_user(uid)
-            return uid
+            if 0 < uid <= 9223372036854775807:
+                db.ensure_basic_user(uid)
+                return uid
+
+        if _is_public_request(request):
+            db.ensure_basic_user(GUEST_TG_ID, "Гость")
+            return GUEST_TG_ID
 
     users = db.get_all_users()
     if users:
@@ -224,8 +247,41 @@ def _refresh_single_club(tg_id: int, club: Dict[str, Any]) -> Dict[str, Any]:
     return updated
 
 
-async def handle_index(request: web.Request) -> web.FileResponse:
+async def handle_app(request: web.Request) -> web.FileResponse:
     return web.FileResponse(os.path.join(WEBAPP_DIR, "index.html"))
+
+
+async def handle_landing(request: web.Request) -> web.FileResponse:
+    landing_path = os.path.join(WEBAPP_DIR, "landing.html")
+    if os.path.isfile(landing_path):
+        return web.FileResponse(landing_path)
+    return web.FileResponse(os.path.join(WEBAPP_DIR, "index.html"))
+
+
+async def handle_index(request: web.Request) -> web.FileResponse:
+    if (request.query.get("uid") or "").strip() or request.query.get("app") == "1":
+        return await handle_app(request)
+    if _is_public_request(request):
+        return await handle_landing(request)
+    return await handle_app(request)
+
+
+async def api_tunnel_status(request: web.Request) -> web.Response:
+    try:
+        import tunnel_manager
+
+        return web.json_response(
+            {
+                "ok": True,
+                "public_url": tunnel_manager.get_public_webapp_url(),
+                "raw_tunnel_url": getattr(tunnel_manager, "get_raw_tunnel_url", lambda: "")(),
+            }
+        )
+    except ImportError:
+        return web.json_response({"ok": False})
+    except Exception as exc:
+        logger.warning("api_tunnel_status failed: %s", exc)
+        return web.json_response({"ok": False})
 
 
 async def handle_manifest(request: web.Request) -> web.FileResponse:
@@ -820,9 +876,12 @@ def create_app() -> web.Application:
     db.init_db()
     app = web.Application()
     app.router.add_get("/", handle_index)
+    app.router.add_get("/app", handle_app)
+    app.router.add_get("/landing", handle_landing)
     app.router.add_get("/themes", handle_themes)
     app.router.add_get("/manifest.json", handle_manifest)
     app.router.add_get("/icon.svg", handle_icon)
+    app.router.add_get("/api/tunnel_status", api_tunnel_status)
     app.router.add_get("/api/bootstrap", api_bootstrap)
     app.router.add_post("/api/schools/login", api_schools_login)
     app.router.add_post("/api/children", api_add_child)

@@ -1,0 +1,1580 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="google">
+<head>
+  <script>
+    (function () {
+      function checkTelegramMiniApp() {
+        try {
+          if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) {
+            location.replace("/app" + location.search);
+          }
+        } catch (e) {}
+      }
+      checkTelegramMiniApp();
+      window.__dzetvaCheckTg = checkTelegramMiniApp;
+    })();
+  </script>
+  <script src="https://telegram.org/js/telegram-web-app.js" async onload="window.__dzetvaCheckTg && window.__dzetvaCheckTg()"></script>
+
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dzetva (Дзетва) — Школьный дневник, питание ЕРИП и кружки Беларуси в одном месте</title>
+  <meta name="description" content="Бесплатный семейный помощник для родителей Беларуси (1–11 класс): балансы школьной столовой и буфета, кружки по ЕРИП, расписание и ДЗ из Schools.by, аналитика расходов." />
+
+  <meta property="og:title" content="Dzetva (Дзетва) — Школьный дневник, питание ЕРИП и кружки Беларуси в одном месте" />
+  <meta property="og:description" content="Бесплатный семейный помощник для родителей Беларуси (1–11 класс): балансы школьной столовой и буфета, кружки по ЕРИП, расписание и ДЗ из Schools.by, аналитика расходов." />
+  <meta property="og:url" content="https://dzetva.by" />
+  <meta property="og:type" content="website" />
+  <meta property="og:locale" content="ru_BY" />
+  <link rel="canonical" href="https://dzetva.by/" />
+  <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#F0F4F9" />
+
+  <script>
+    (function () {
+      try {
+        var params = new URLSearchParams(location.search);
+        var q = params.get("theme");
+        var saved = localStorage.getItem("hub_google_theme");
+        var theme = (q === "dark" || q === "google-dark") ? "google-dark" : (saved === "google-dark" ? "google-dark" : "google");
+        document.documentElement.setAttribute("data-theme", theme);
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute("content", theme === "google-dark" ? "#131314" : "#F0F4F9");
+      } catch (e) {}
+    })();
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      /* Google Material You (Material 3) */
+      --bg: #F0F4F9;
+      --surface: #FFFFFF;
+      --surface-soft: #F8FAFD;
+      --surface-tonal: #E8F0FE;
+      --primary: #1A73E8;
+      --primary-container: #D3E3FD;
+      --on-primary-container: #041E49;
+      --nav-pill: #C2E7FF;
+
+      --text: #1F1F1F;
+      --text-sec: #444746;
+      --muted: #747775;
+      --outline: #E1E3E1;
+
+      --ok-bg: #E6F4EA;
+      --ok-text: #137333;
+      --warn-bg: #FEF7E0;
+      --warn-text: #B06000;
+      --bad-bg: #FCE8E6;
+      --bad-text: #C5221F;
+      --info-bg: #E8F0FE;
+      --info-text: #1967D2;
+      --club-bg: #F3E8FD;
+      --club-text: #7627BB;
+
+      --g-blue: #4285F4;
+      --g-red: #EA4335;
+      --g-yellow: #FBBC04;
+      --g-green: #34A853;
+
+      --radius-xl: 28px;
+      --radius-lg: 22px;
+      --radius-md: 16px;
+      --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 16px rgba(26, 115, 232, 0.05);
+      --shadow-phone: 0 20px 50px rgba(4, 30, 73, 0.14), 0 4px 14px rgba(0, 0, 0, 0.06);
+      --phone-bezel: #1E1F20;
+    }
+
+    html[data-theme="google-dark"] {
+      --bg: #131314;
+      --surface: #1E1F20;
+      --surface-soft: #28292A;
+      --surface-tonal: #1F2D42;
+      --primary: #A8C7FA;
+      --primary-container: #0842A0;
+      --on-primary-container: #D3E3FD;
+      --nav-pill: #004A77;
+
+      --text: #E3E3E3;
+      --text-sec: #C4C7C5;
+      --muted: #8E918F;
+      --outline: #333537;
+
+      --ok-bg: #0F2E1A;
+      --ok-text: #81C995;
+      --warn-bg: #33240B;
+      --warn-text: #FDD663;
+      --bad-bg: #3C1614;
+      --bad-text: #F28B82;
+      --info-bg: #1B2D4B;
+      --info-text: #8AB4F8;
+      --club-bg: #2C1B3D;
+      --club-text: #D7AEFB;
+
+      --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.35);
+      --shadow-phone: 0 24px 60px rgba(0, 0, 0, 0.6);
+      --phone-bezel: #333537;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: clip;
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    h1, h2, h3, .brand-name, .step-num, .mock-amount, .stat-big {
+      font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    code {
+      font-family: inherit;
+      font-weight: 600;
+      font-size: 0.95em;
+      padding: 1px 6px;
+      border-radius: 6px;
+      background: var(--surface-soft);
+      color: var(--text);
+    }
+
+    /* 4-цветная полоска Google сверху */
+    .google-strip {
+      height: 3px;
+      width: 100%;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      position: sticky;
+      top: 0;
+      z-index: 60;
+    }
+    .google-strip span:nth-child(1) { background: var(--g-blue); }
+    .google-strip span:nth-child(2) { background: var(--g-red); }
+    .google-strip span:nth-child(3) { background: var(--g-yellow); }
+    .google-strip span:nth-child(4) { background: var(--g-green); }
+
+    /* Шапка */
+    .topbar {
+      position: sticky;
+      top: 3px;
+      z-index: 50;
+      background: color-mix(in srgb, var(--bg) 88%, transparent);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid color-mix(in srgb, var(--outline) 65%, transparent);
+    }
+    .topbar-inner {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+    .brand-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      background: var(--surface);
+      box-shadow: var(--shadow-card);
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+    }
+    .brand-text {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.15;
+    }
+    .brand-name {
+      font-size: 19px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--text);
+    }
+    .brand-domain {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      letter-spacing: 0.01em;
+    }
+
+    .nav-links {
+      display: none;
+      align-items: center;
+      gap: 6px;
+    }
+    .nav-links a {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-sec);
+      padding: 8px 14px;
+      border-radius: 999px;
+      transition: background 0.15s, color 0.15s;
+    }
+    .nav-links a:hover {
+      background: var(--surface);
+      color: var(--text);
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .icon-circle-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 999px;
+      border: 1px solid color-mix(in srgb, var(--outline) 70%, transparent);
+      background: var(--surface);
+      color: var(--text-sec);
+      box-shadow: var(--shadow-card);
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      transition: transform 0.12s, background 0.15s;
+    }
+    .icon-circle-btn:hover { background: var(--surface-soft); }
+    .icon-circle-btn:active { transform: scale(0.94); }
+
+    .btn-open-compact {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      height: 40px;
+      padding: 0 16px;
+      border-radius: 999px;
+      background: var(--primary);
+      color: #FFFFFF;
+      font-size: 14px;
+      font-weight: 600;
+      box-shadow: var(--shadow-card);
+      transition: transform 0.12s, opacity 0.15s;
+    }
+    .btn-open-compact:hover { opacity: 0.92; }
+    .btn-open-compact:active { transform: scale(0.97); }
+    html[data-theme="google-dark"] .btn-open-compact,
+    html[data-theme="google-dark"] .btn-primary {
+      color: #041E49;
+    }
+
+    /* Общие секции */
+    .wrap {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 0 16px;
+    }
+    section {
+      padding: 36px 0;
+    }
+    .section-head {
+      max-width: 680px;
+      margin: 0 auto 28px;
+      text-align: center;
+    }
+    .section-kicker {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      border-radius: 999px;
+      background: var(--surface-tonal);
+      color: var(--info-text);
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+    .section-title {
+      font-size: 26px;
+      font-weight: 800;
+      letter-spacing: -0.025em;
+      line-height: 1.2;
+      color: var(--text);
+    }
+    .section-sub {
+      margin-top: 10px;
+      font-size: 15px;
+      color: var(--text-sec);
+    }
+
+    /* Hero-блок */
+    .hero-section {
+      padding: 28px 0 36px;
+    }
+    .hero-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 32px;
+      align-items: center;
+    }
+    .hero-content {
+      min-width: 0;
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 14px;
+      border-radius: 999px;
+      background: var(--primary-container);
+      color: var(--on-primary-container);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      margin-bottom: 16px;
+    }
+    .hero-badge-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--g-green);
+      flex-shrink: 0;
+    }
+    .hero-title {
+      font-size: 31px;
+      font-weight: 800;
+      line-height: 1.14;
+      letter-spacing: -0.03em;
+      color: var(--text);
+    }
+    .hero-subtitle {
+      margin-top: 14px;
+      font-size: 16px;
+      line-height: 1.55;
+      color: var(--text-sec);
+      max-width: 560px;
+    }
+    .hero-ctas {
+      margin-top: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .btn-cta {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      min-height: 52px;
+      padding: 13px 22px;
+      border-radius: 999px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: transform 0.12s, box-shadow 0.15s, background 0.15s;
+      text-align: center;
+    }
+    .btn-cta:active { transform: scale(0.98); }
+    .btn-primary {
+      background: var(--primary);
+      color: #FFFFFF;
+      box-shadow: 0 6px 20px color-mix(in srgb, var(--primary) 28%, transparent);
+    }
+    .btn-primary:hover {
+      box-shadow: 0 8px 24px color-mix(in srgb, var(--primary) 36%, transparent);
+    }
+    .btn-tonal {
+      background: var(--surface);
+      color: var(--text);
+      border-color: var(--outline);
+      box-shadow: var(--shadow-card);
+    }
+    .btn-tonal:hover {
+      background: var(--surface-soft);
+    }
+
+    .hero-trust {
+      margin-top: 20px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 14px;
+      font-size: 13px;
+      color: var(--text-sec);
+    }
+    .hero-trust-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .hero-trust-check {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--ok-bg);
+      color: var(--ok-text);
+      display: grid;
+      place-items: center;
+      font-size: 11px;
+      font-weight: 800;
+      flex-shrink: 0;
+    }
+
+    /* Интерактивный макет смартфона */
+    .mockup-col {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .phone-frame {
+      width: 100%;
+      max-width: 374px;
+      background: var(--phone-bezel);
+      border-radius: 40px;
+      padding: 10px;
+      box-shadow: var(--shadow-phone);
+      position: relative;
+    }
+    .phone-screen {
+      background: var(--bg);
+      border-radius: 31px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      min-height: 530px;
+      border: 1px solid color-mix(in srgb, var(--outline) 45%, transparent);
+    }
+    .phone-notch-bar {
+      padding: 10px 18px 4px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--muted);
+    }
+    .phone-island {
+      width: 72px;
+      height: 16px;
+      border-radius: 999px;
+      background: var(--phone-bezel);
+    }
+    .phone-app-header {
+      padding: 6px 14px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .phone-app-brand {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+      font-weight: 700;
+      font-size: 15px;
+    }
+    .phone-child-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 10px;
+      border-radius: 999px;
+      background: var(--nav-pill);
+      color: var(--on-primary-container);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    /* Таб-бар переключения 3 вкладок внутри превью */
+    .mockup-tabs {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 4px;
+      margin: 0 12px 10px;
+      padding: 4px;
+      border-radius: 999px;
+      background: var(--surface);
+      border: 1px solid var(--outline);
+    }
+    .mockup-tab {
+      border: none;
+      background: transparent;
+      color: var(--text-sec);
+      font-family: inherit;
+      font-size: 11.5px;
+      font-weight: 600;
+      padding: 8px 6px;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: background 0.16s, color 0.16s;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .mockup-tab:hover {
+      color: var(--text);
+    }
+    .mockup-tab.active {
+      background: var(--primary-container);
+      color: var(--on-primary-container);
+      font-weight: 700;
+    }
+
+    .mockup-body {
+      padding: 0 12px 14px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    .mockup-panel {
+      display: none;
+      flex-direction: column;
+      gap: 9px;
+      animation: fadePanel 0.2s ease;
+    }
+    .mockup-panel.active {
+      display: flex;
+    }
+    @keyframes fadePanel {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .mock-card {
+      background: var(--surface);
+      border-radius: 18px;
+      padding: 12px 13px;
+      box-shadow: var(--shadow-card);
+      border: 1px solid color-mix(in srgb, var(--outline) 65%, transparent);
+    }
+    .mock-card-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .mock-card-title {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.25;
+    }
+    .mock-card-sub {
+      font-size: 11.5px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .mock-amount {
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--text);
+      white-space: nowrap;
+    }
+    .mock-card-foot {
+      margin-top: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 9px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .pill-ok { background: var(--ok-bg); color: var(--ok-text); }
+    .pill-warn { background: var(--warn-bg); color: var(--warn-text); }
+    .pill-info { background: var(--info-bg); color: var(--info-text); }
+    .pill-club { background: var(--club-bg); color: var(--club-text); }
+
+    .mock-copy-btn {
+      border: none;
+      background: var(--surface-tonal);
+      color: var(--info-text);
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+    .mock-copy-btn:active { transform: scale(0.95); }
+
+    .mock-hint-banner {
+      margin-top: 2px;
+      padding: 10px 12px;
+      border-radius: 16px;
+      background: var(--surface-tonal);
+      color: var(--info-text);
+      font-size: 11.5px;
+      font-weight: 600;
+      line-height: 1.4;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    /* Вкладка 2: Учёба и ДЗ */
+    .grade-hero {
+      background: var(--primary-container);
+      color: var(--on-primary-container);
+      border-radius: 18px;
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .grade-hero-label {
+      font-size: 12px;
+      font-weight: 600;
+      opacity: 0.9;
+    }
+    .grade-hero-sub {
+      font-size: 11px;
+      opacity: 0.78;
+      margin-top: 2px;
+    }
+    .grade-badge {
+      font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+      font-size: 22px;
+      font-weight: 800;
+      background: var(--surface);
+      color: var(--primary);
+      padding: 4px 12px;
+      border-radius: 14px;
+      box-shadow: var(--shadow-card);
+      flex-shrink: 0;
+    }
+    .lesson-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .lesson-item {
+      background: var(--surface);
+      border-radius: 16px;
+      padding: 10px 12px;
+      border: 1px solid color-mix(in srgb, var(--outline) 65%, transparent);
+      display: grid;
+      grid-template-columns: 44px 1fr;
+      gap: 10px;
+      align-items: start;
+    }
+    .lesson-time {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--primary);
+      background: var(--surface-tonal);
+      padding: 4px 6px;
+      border-radius: 10px;
+      text-align: center;
+      line-height: 1.2;
+    }
+    .lesson-name {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .lesson-hw {
+      font-size: 11.5px;
+      color: var(--text-sec);
+      margin-top: 2px;
+    }
+    .mock-share-btn {
+      width: 100%;
+      margin-top: 2px;
+      border: none;
+      border-radius: 999px;
+      background: var(--primary);
+      color: #FFFFFF;
+      font-family: inherit;
+      font-size: 12.5px;
+      font-weight: 700;
+      padding: 11px 14px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      transition: transform 0.12s, opacity 0.15s;
+    }
+    .mock-share-btn:active { transform: scale(0.97); }
+    html[data-theme="google-dark"] .mock-share-btn { color: #041E49; }
+
+    /* Вкладка 3: Аналитика трат */
+    .spend-summary {
+      background: var(--primary-container);
+      color: var(--on-primary-container);
+      border-radius: 18px;
+      padding: 14px;
+    }
+    .spend-kicker {
+      font-size: 11.5px;
+      font-weight: 600;
+      opacity: 0.85;
+    }
+    .stat-big {
+      font-size: 26px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      margin-top: 2px;
+      line-height: 1.15;
+    }
+    .spend-sub {
+      font-size: 11px;
+      opacity: 0.8;
+      margin-top: 4px;
+    }
+    .spend-cats {
+      background: var(--surface);
+      border-radius: 18px;
+      padding: 12px 13px;
+      display: flex;
+      flex-direction: column;
+      gap: 11px;
+      border: 1px solid color-mix(in srgb, var(--outline) 65%, transparent);
+    }
+    .cat-row-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12.5px;
+      font-weight: 600;
+      margin-bottom: 5px;
+    }
+    .cat-val {
+      font-weight: 700;
+      color: var(--text);
+    }
+    .progress-track {
+      width: 100%;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--surface-soft);
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      border-radius: 999px;
+    }
+
+    .mockup-caption {
+      margin-top: 12px;
+      font-size: 12.5px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    /* Блок «Почему родители выбирают Dzetva» (4 карточки) */
+    .features-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 14px;
+    }
+    .feature-card {
+      background: var(--surface);
+      border-radius: var(--radius-lg);
+      padding: 22px;
+      box-shadow: var(--shadow-card);
+      border: 1px solid color-mix(in srgb, var(--outline) 70%, transparent);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      transition: transform 0.16s, box-shadow 0.16s;
+    }
+    .feature-card:hover {
+      transform: translateY(-2px);
+    }
+    .feature-icon {
+      width: 46px;
+      height: 46px;
+      border-radius: 15px;
+      display: grid;
+      place-items: center;
+      font-size: 22px;
+    }
+    .fi-blue { background: var(--info-bg); color: var(--info-text); }
+    .fi-green { background: var(--ok-bg); color: var(--ok-text); }
+    .fi-amber { background: var(--warn-bg); color: var(--warn-text); }
+    .fi-purple { background: var(--club-bg); color: var(--club-text); }
+    .feature-card h3 {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.015em;
+      color: var(--text);
+    }
+    .feature-card p {
+      font-size: 14.5px;
+      color: var(--text-sec);
+      line-height: 1.55;
+    }
+
+    /* Блок «Как начать за 30 секунд» (3 шага) */
+    .steps-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 14px;
+    }
+    .step-card {
+      background: var(--surface);
+      border-radius: var(--radius-lg);
+      padding: 22px;
+      box-shadow: var(--shadow-card);
+      border: 1px solid color-mix(in srgb, var(--outline) 70%, transparent);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .step-num {
+      width: 36px;
+      height: 36px;
+      border-radius: 12px;
+      background: var(--primary-container);
+      color: var(--on-primary-container);
+      font-size: 16px;
+      font-weight: 800;
+      display: grid;
+      place-items: center;
+    }
+    .step-card h3 {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .step-card p {
+      font-size: 14px;
+      color: var(--text-sec);
+    }
+
+    /* FAQ */
+    .faq-list {
+      max-width: 780px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .faq-item {
+      background: var(--surface);
+      border-radius: var(--radius-md);
+      border: 1px solid color-mix(in srgb, var(--outline) 80%, transparent);
+      box-shadow: var(--shadow-card);
+      overflow: hidden;
+    }
+    .faq-item summary {
+      list-style: none;
+      cursor: pointer;
+      padding: 18px 20px;
+      font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+      font-size: 15.5px;
+      font-weight: 700;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      user-select: none;
+    }
+    .faq-item summary::-webkit-details-marker {
+      display: none;
+    }
+    .faq-chevron {
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      background: var(--surface-soft);
+      color: var(--text-sec);
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+      transition: transform 0.2s ease, background 0.15s;
+    }
+    .faq-item[open] .faq-chevron {
+      transform: rotate(180deg);
+      background: var(--surface-tonal);
+      color: var(--info-text);
+    }
+    .faq-answer {
+      padding: 0 20px 18px;
+      font-size: 14.5px;
+      color: var(--text-sec);
+      line-height: 1.6;
+    }
+
+    /* Нижний CTA баннер */
+    .bottom-cta-card {
+      background: var(--primary-container);
+      color: var(--on-primary-container);
+      border-radius: var(--radius-xl);
+      padding: 28px 22px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+    }
+    .bottom-cta-card h2 {
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      max-width: 560px;
+      line-height: 1.22;
+    }
+    .bottom-cta-card p {
+      font-size: 15px;
+      opacity: 0.9;
+      max-width: 520px;
+    }
+    .bottom-cta-actions {
+      margin-top: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      width: 100%;
+      max-width: 460px;
+    }
+
+    /* Подвал */
+    footer {
+      border-top: 1px solid var(--outline);
+      padding: 26px 0 36px;
+      margin-top: 16px;
+    }
+    .footer-inner {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      text-align: center;
+      font-size: 13.5px;
+      color: var(--muted);
+    }
+    .footer-brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-sec);
+      font-weight: 600;
+    }
+    .footer-links {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .footer-links a:hover {
+      color: var(--primary);
+    }
+
+    /* Тост */
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 24px;
+      transform: translateX(-50%) translateY(16px);
+      background: #1F1F1F;
+      color: #FFFFFF;
+      padding: 12px 18px;
+      border-radius: 999px;
+      font-size: 13.5px;
+      font-weight: 600;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s, transform 0.2s;
+      z-index: 100;
+      max-width: calc(100vw - 32px);
+      text-align: center;
+    }
+    html[data-theme="google-dark"] .toast {
+      background: #E3E3E3;
+      color: #131314;
+    }
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* Адаптив для планшетов и десктопов (1100px+) */
+    @media (min-width: 640px) {
+      .wrap { padding: 0 24px; }
+      .hero-title { font-size: 38px; }
+      .hero-ctas { flex-direction: row; flex-wrap: wrap; }
+      .features-grid { grid-template-columns: repeat(2, 1fr); gap: 18px; }
+      .bottom-cta-card { padding: 40px 32px; }
+      .bottom-cta-actions { flex-direction: row; justify-content: center; max-width: none; width: auto; }
+      .footer-inner { flex-direction: row; text-align: left; }
+    }
+
+    @media (min-width: 860px) {
+      .nav-links { display: flex; }
+      section { padding: 48px 0; }
+      .hero-section { padding: 42px 0 52px; }
+      .hero-grid {
+        grid-template-columns: 1.08fr 0.92fr;
+        gap: 44px;
+      }
+      .hero-title { font-size: 42px; }
+      .section-title { font-size: 32px; }
+      .steps-grid { grid-template-columns: repeat(3, 1fr); gap: 18px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="google-strip" aria-hidden="true">
+  <span></span><span></span><span></span><span></span>
+</div>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a href="#" class="brand">
+      <div class="brand-icon" aria-hidden="true">
+        <svg width="24" height="24" viewBox="0 0 64 64" fill="none">
+          <ellipse cx="32" cy="15.5" rx="6.5" ry="9.5" fill="#4285F4"/>
+          <ellipse cx="32" cy="48.5" rx="6.5" ry="9.5" fill="#1A73E8"/>
+          <ellipse cx="16.5" cy="24" rx="9" ry="6.2" transform="rotate(28 16.5 24)" fill="#5E97F6"/>
+          <ellipse cx="47.5" cy="24" rx="9" ry="6.2" transform="rotate(-28 47.5 24)" fill="#4285F4"/>
+          <ellipse cx="16.5" cy="40" rx="9" ry="6.2" transform="rotate(-28 16.5 40)" fill="#1A73E8"/>
+          <ellipse cx="47.5" cy="40" rx="9" ry="6.2" transform="rotate(28 47.5 40)" fill="#34A853"/>
+          <circle cx="32" cy="32" r="8" fill="#FBBC04"/>
+          <circle cx="32" cy="32" r="3.6" fill="#FFFFFF"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <span class="brand-name">Dzetva</span>
+        <span class="brand-domain">dzetva.by</span>
+      </div>
+    </a>
+
+    <nav class="nav-links" aria-label="Навигация по странице">
+      <a href="#preview">Превью</a>
+      <a href="#features">Преимущества</a>
+      <a href="#how-to">Как начать</a>
+      <a href="#faq">Вопросы</a>
+    </nav>
+
+    <div class="top-actions">
+      <button class="icon-circle-btn" id="btnThemeToggle" type="button" title="Переключить светлую / тёмную тему" aria-label="Переключить светлую или тёмную тему" onclick="toggleGoogleTheme()">
+        <svg id="themeToggleIcon" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+        </svg>
+      </button>
+      <a class="btn-open-compact" href="/app">Открыть</a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- Hero + Интерактивный телефон -->
+  <section class="hero-section" id="preview">
+    <div class="wrap">
+      <div class="hero-grid">
+        <div class="hero-content">
+          <div class="hero-badge">
+            <span class="hero-badge-dot" aria-hidden="true"></span>
+            <span>Беларусь · 1–11 класс · 0% комиссии</span>
+          </div>
+          <h1 class="hero-title">Школа, питание ЕРИП и кружки — без хаоса в родительских чатах</h1>
+          <p class="hero-subtitle">Бесплатный семейный помощник для родителей Беларуси (1–11 класс). Работает даже в 1–2 классах без пароля от Schools.by</p>
+
+          <div class="hero-ctas">
+            <a class="btn-cta btn-primary" href="https://t.me/SC199_DNEVNIK_bot" target="_blank" rel="noopener noreferrer">
+              <span>📱 Запустить в Telegram</span>
+            </a>
+            <a class="btn-cta btn-tonal" href="/app">
+              <span>🌐 Открыть веб-версию</span>
+            </a>
+          </div>
+
+          <div class="hero-trust">
+            <span class="hero-trust-item">
+              <span class="hero-trust-check" aria-hidden="true">✓</span>
+              <span>Без привязки банковских карт</span>
+            </span>
+            <span class="hero-trust-item">
+              <span class="hero-trust-check" aria-hidden="true">✓</span>
+              <span>700+ кружков и все школы РБ</span>
+            </span>
+            <span class="hero-trust-item">
+              <span class="hero-trust-check" aria-hidden="true">✓</span>
+              <span>Все дети в одном окне</span>
+            </span>
+          </div>
+        </div>
+
+        <div class="mockup-col">
+          <div class="phone-frame" aria-label="Интерактивное превью приложения Dzetva">
+            <div class="phone-screen">
+              <div class="phone-notch-bar">
+                <span>08:15</span>
+                <div class="phone-island" aria-hidden="true"></div>
+                <span>LTE</span>
+              </div>
+
+              <div class="phone-app-header">
+                <div class="phone-app-brand">
+                  <svg width="20" height="20" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+                    <ellipse cx="32" cy="15.5" rx="6.5" ry="9.5" fill="#4285F4"/>
+                    <ellipse cx="32" cy="48.5" rx="6.5" ry="9.5" fill="#1A73E8"/>
+                    <ellipse cx="16.5" cy="24" rx="9" ry="6.2" transform="rotate(28 16.5 24)" fill="#5E97F6"/>
+                    <ellipse cx="47.5" cy="24" rx="9" ry="6.2" transform="rotate(-28 47.5 24)" fill="#4285F4"/>
+                    <ellipse cx="16.5" cy="40" rx="9" ry="6.2" transform="rotate(-28 16.5 40)" fill="#1A73E8"/>
+                    <ellipse cx="47.5" cy="40" rx="9" ry="6.2" transform="rotate(28 47.5 40)" fill="#34A853"/>
+                    <circle cx="32" cy="32" r="8" fill="#FBBC04"/>
+                    <circle cx="32" cy="32" r="3.6" fill="#FFFFFF"/>
+                  </svg>
+                  <span>Dzetva</span>
+                </div>
+                <span class="phone-child-pill">Маша · 5Б</span>
+              </div>
+
+              <div class="mockup-tabs" role="tablist" aria-label="Разделы превью">
+                <button type="button" class="mockup-tab active" role="tab" aria-selected="true" data-tab="erip" onclick="switchMockupTab('erip')">Баланс ЕРИП</button>
+                <button type="button" class="mockup-tab" role="tab" aria-selected="false" data-tab="study" onclick="switchMockupTab('study')">Учёба и ДЗ</button>
+                <button type="button" class="mockup-tab" role="tab" aria-selected="false" data-tab="spend" onclick="switchMockupTab('spend')">Аналитика трат</button>
+              </div>
+
+              <div class="mockup-body">
+                <!-- Вкладка 1: Баланс ЕРИП -->
+                <div class="mockup-panel active" id="panel-erip" role="tabpanel">
+                  <div class="mock-card">
+                    <div class="mock-card-row">
+                      <div>
+                        <div class="mock-card-title">Школьная столовая</div>
+                        <div class="mock-card-sub">Лицевой счёт · 1014258910</div>
+                      </div>
+                      <div class="mock-amount">15,59 BYN</div>
+                    </div>
+                    <div class="mock-card-foot">
+                      <span class="pill pill-ok">✓ Хватает на обеды</span>
+                      <button type="button" class="mock-copy-btn" onclick="showToast('Счёт ЕРИП скопирован — вставьте в своём банке (0% комиссии)')">Скопировать счёт</button>
+                    </div>
+                  </div>
+
+                  <div class="mock-card">
+                    <div class="mock-card-row">
+                      <div>
+                        <div class="mock-card-title">Школьный буфет</div>
+                        <div class="mock-card-sub">Лицевой счёт · 1014258911</div>
+                      </div>
+                      <div class="mock-amount">9,27 BYN</div>
+                    </div>
+                    <div class="mock-card-foot">
+                      <span class="pill pill-ok">✓ Хватает на обеды</span>
+                      <button type="button" class="mock-copy-btn" onclick="showToast('Счёт буфета скопирован — оплата в вашем банке без комиссии')">Скопировать счёт</button>
+                    </div>
+                  </div>
+
+                  <div class="mock-card">
+                    <div class="mock-card-row">
+                      <div>
+                        <div class="mock-card-title">Робототехника КодЭндБот</div>
+                        <div class="mock-card-sub">Кружок · ЕРИП код 4458911</div>
+                      </div>
+                      <div class="mock-amount">160,00 BYN</div>
+                    </div>
+                    <div class="mock-card-foot">
+                      <span class="pill pill-warn">Оплата до 10-го</span>
+                      <button type="button" class="mock-copy-btn" onclick="showToast('Номер договора кружка скопирован в буфер обмена')">Скопировать счёт</button>
+                    </div>
+                  </div>
+
+                  <div class="mock-hint-banner">
+                    <span aria-hidden="true">🔒</span>
+                    <span>Копирование счёта ЕРИП в 1 тап, 0% автосписаний — вы платите только через свой банк.</span>
+                  </div>
+                </div>
+
+                <!-- Вкладка 2: Учёба и ДЗ -->
+                <div class="mockup-panel" id="panel-study" role="tabpanel">
+                  <div class="grade-hero">
+                    <div>
+                      <div class="grade-hero-label">Четверть 2 · Schools.by</div>
+                      <div class="grade-hero-sub">Все оценки и ДЗ обновляются сами</div>
+                    </div>
+                    <div class="grade-badge" title="Средний балл">8,7</div>
+                  </div>
+
+                  <div class="lesson-list">
+                    <div class="lesson-item">
+                      <div class="lesson-time">08:30<br/>09:15</div>
+                      <div>
+                        <div class="lesson-name">Математика</div>
+                        <div class="lesson-hw">ДЗ: Стр. 48, № 124 (б, в)</div>
+                      </div>
+                    </div>
+                    <div class="lesson-item">
+                      <div class="lesson-time">09:25<br/>10:10</div>
+                      <div>
+                        <div class="lesson-name">Русский язык</div>
+                        <div class="lesson-hw">ДЗ: Упр. 89, выучить правило § 12</div>
+                      </div>
+                    </div>
+                    <div class="lesson-item">
+                      <div class="lesson-time">10:25<br/>11:10</div>
+                      <div>
+                        <div class="lesson-name">Английский язык</div>
+                        <div class="lesson-hw">ДЗ: Workbook p. 22 ex. 3, слова</div>
+                      </div>
+                    </div>
+                    <div class="lesson-item">
+                      <div class="lesson-time">11:25<br/>12:10</div>
+                      <div>
+                        <div class="lesson-name">История Беларуси</div>
+                        <div class="lesson-hw">ДЗ: § 7, вопросы после параграфа</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button type="button" class="mock-share-btn" onclick="showToast('Так родители за 1 секунду отправляют ДЗ в чат класса')">
+                    <span>📤 Поделиться ДЗ в чат класса</span>
+                  </button>
+                </div>
+
+                <!-- Вкладка 3: Аналитика трат -->
+                <div class="mockup-panel" id="panel-spend" role="tabpanel">
+                  <div class="spend-summary">
+                    <div class="spend-kicker">Траты на школу и кружки · за месяц</div>
+                    <div class="stat-big">284,50 BYN</div>
+                    <div class="spend-sub">По всем подключённым счетам и чекам ЕРИП</div>
+                  </div>
+
+                  <div class="spend-cats">
+                    <div>
+                      <div class="cat-row-top">
+                        <span>🎨 Кружки и секции</span>
+                        <span class="cat-val">160,00 BYN</span>
+                      </div>
+                      <div class="progress-track">
+                        <div class="progress-fill" style="width: 56%; background: var(--g-blue);"></div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div class="cat-row-top">
+                        <span>🍲 Столовая</span>
+                        <span class="cat-val">68,40 BYN</span>
+                      </div>
+                      <div class="progress-track">
+                        <div class="progress-fill" style="width: 24%; background: var(--g-green);"></div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div class="cat-row-top">
+                        <span>🥐 Буфет</span>
+                        <span class="cat-val">34,10 BYN</span>
+                      </div>
+                      <div class="progress-track">
+                        <div class="progress-fill" style="width: 12%; background: var(--g-yellow);"></div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div class="cat-row-top">
+                        <span>📚 Учебники и пособия</span>
+                        <span class="cat-val">22,00 BYN</span>
+                      </div>
+                      <div class="progress-track">
+                        <div class="progress-fill" style="width: 8%; background: var(--g-red);"></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="mock-hint-banner">
+                    <span aria-hidden="true">📊</span>
+                    <span>Понятный семейный бюджет на каждого ребёнка — без таблиц в Excel.</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="mockup-caption">Нажмите на вкладки внутри экрана, чтобы посмотреть интерфейс</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Почему родители выбирают Dzetva -->
+  <section id="features">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="section-kicker">Создано для белорусских семей</span>
+        <h2 class="section-title">Почему родители выбирают Dzetva</h2>
+        <p class="section-sub">Всё, что обычно приходится искать по разным сайтам, банковским квитанциям и перепискам в Вайбере, собрано на одном понятном экране.</p>
+      </div>
+
+      <div class="features-grid">
+        <article class="feature-card">
+          <div class="feature-icon fi-blue" aria-hidden="true">🇧🇾</div>
+          <h3>Для всей Беларуси</h3>
+          <p>Поиск по 700+ кружкам Минска и подключение любой школы или секции в Бресте, Гродно, Гомеле, Витебске, Могилёве по коду услуги ЕРИП.</p>
+        </article>
+
+        <article class="feature-card">
+          <div class="feature-icon fi-green" aria-hidden="true">🎒</div>
+          <h3>Подходит для 1–2 класса</h3>
+          <p>Не требует аккаунта <code>Schools.by</code>: достаточно 10-значного номера ученика для контроля питания в столовой и буфете.</p>
+        </article>
+
+        <article class="feature-card">
+          <div class="feature-icon fi-amber" aria-hidden="true">🛡️</div>
+          <h3>100% безопасно и 0% комиссии</h3>
+          <p>Приложение не привязывает банковские карты и ничего не списывает: вы просто копируете номер счёта и платите в своём банке без комиссии.</p>
+        </article>
+
+        <article class="feature-card">
+          <div class="feature-icon fi-purple" aria-hidden="true">🔔</div>
+          <h3>Умные напоминания в Telegram</h3>
+          <p>Бот заранее предупредит, когда на обедах осталось меньше 5 BYN или подходит срок оплаты кружка — без забытых платежей.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- Как начать за 30 секунд -->
+  <section id="how-to">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="section-kicker">Простой старт</span>
+        <h2 class="section-title">Как начать за 30 секунд</h2>
+        <p class="section-sub">Никакой долгой регистрации и сложных настроек — всё работает сразу в Telegram или в браузере.</p>
+      </div>
+
+      <div class="steps-grid">
+        <div class="step-card">
+          <div class="step-num">1</div>
+          <h3>Откройте бот или веб-версию</h3>
+          <p>Нажмите «Запустить в Telegram» или откройте веб-приложение на телефоне и компьютере — отдельный аккаунт создавать не нужно.</p>
+        </div>
+
+        <div class="step-card">
+          <div class="step-num">2</div>
+          <h3>Добавьте ребёнка и услуги</h3>
+          <p>Укажите 10-значный номер питания, найдите кружок в каталоге или по коду ЕРИП. По желанию подключите дневник <code>Schools.by</code>.</p>
+        </div>
+
+        <div class="step-card">
+          <div class="step-num">3</div>
+          <h3>Держите всё под рукой</h3>
+          <p>Проверяйте остатки в столовой и кружках, делитесь ДЗ с родителями класса и получайте мягкие уведомления до того, как баланс уйдёт в минус.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section id="faq">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="section-kicker">Ответы на вопросы</span>
+        <h2 class="section-title">Частые вопросы родителей</h2>
+      </div>
+
+      <div class="faq-list">
+        <details class="faq-item" open>
+          <summary>
+            <span>Нужно ли привязывать банковскую карту или платить комиссию?</span>
+            <span class="faq-chevron" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </span>
+          </summary>
+          <div class="faq-answer">
+            Нет. Dzetva не запрашивает реквизиты банковских карт, не проводит списаний и не берёт комиссию. Приложение показывает точный баланс и сумму к оплате, а вы в один тап копируете номер счёта и оплачиваете как обычно в приложении своего банка.
+          </div>
+        </details>
+
+        <details class="faq-item">
+          <summary>
+            <span>Подойдёт ли для 1–2 класса, если у нас ещё нет логина Schools.by?</span>
+            <span class="faq-chevron" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </span>
+          </summary>
+          <div class="faq-answer">
+            Да, конечно! Вход в <code>Schools.by</code> полностью необязателен. Чтобы проверять балансы школьной столовой, буфета, продлёнки или кружков по ЕРИП, нужен только 10-значный номер ученика или лицевой счёт услуги.
+          </div>
+        </details>
+
+        <details class="faq-item">
+          <summary>
+            <span>Работает ли Dzetva за пределами Минска?</span>
+            <span class="faq-chevron" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </span>
+          </summary>
+          <div class="faq-answer">
+            Да, приложение работает по всей Беларуси. Для Минска в справочник уже добавлено более 700 кружков и школьных комбинатов, а любую организацию в Бресте, Гродно, Гомеле, Витебске, Могилёве и районных центрах можно подключить по коду услуги ЕРИП.
+          </div>
+        </details>
+
+        <details class="faq-item">
+          <summary>
+            <span>Можно ли вести сразу двоих или троих детей?</span>
+            <span class="faq-chevron" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </span>
+          </summary>
+          <div class="faq-answer">
+            Да. Вы можете добавить в профиль всех детей и в один клик переключаться между ними либо смотреть общую картину балансов и трат по всей семье.
+          </div>
+        </details>
+
+        <details class="faq-item">
+          <summary>
+            <span>Сколько стоит использование Dzetva?</span>
+            <span class="faq-chevron" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </span>
+          </summary>
+          <div class="faq-answer">
+            Dzetva полностью бесплатна для родителей: без скрытых подписок, рекламы и комиссий при проверке счетов.
+          </div>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- Финальный CTA -->
+  <section>
+    <div class="wrap">
+      <div class="bottom-cta-card">
+        <h2>Попробуйте Dzetva сегодня — все школьные балансы и ДЗ в одном месте</h2>
+        <p>Откройте прямо в Telegram или в браузере. Бесплатно, без привязки карт и за 30 секунд.</p>
+        <div class="bottom-cta-actions">
+          <a class="btn-cta btn-primary" href="https://t.me/SC199_DNEVNIK_bot" target="_blank" rel="noopener noreferrer">
+            <span>📱 Запустить в Telegram</span>
+          </a>
+          <a class="btn-cta btn-tonal" href="/app">
+            <span>🌐 Открыть веб-версию</span>
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <svg width="20" height="20" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+          <ellipse cx="32" cy="15.5" rx="6.5" ry="9.5" fill="#4285F4"/>
+          <ellipse cx="32" cy="48.5" rx="6.5" ry="9.5" fill="#1A73E8"/>
+          <ellipse cx="16.5" cy="24" rx="9" ry="6.2" transform="rotate(28 16.5 24)" fill="#5E97F6"/>
+          <ellipse cx="47.5" cy="24" rx="9" ry="6.2" transform="rotate(-28 47.5 24)" fill="#4285F4"/>
+          <ellipse cx="16.5" cy="40" rx="9" ry="6.2" transform="rotate(-28 16.5 40)" fill="#1A73E8"/>
+          <ellipse cx="47.5" cy="40" rx="9" ry="6.2" transform="rotate(28 47.5 40)" fill="#34A853"/>
+          <circle cx="32" cy="32" r="8" fill="#FBBC04"/>
+          <circle cx="32" cy="32" r="3.6" fill="#FFFFFF"/>
+        </svg>
+        <span>dzetva.by · Сделано в Беларуси с заботой о родителях</span>
+      </div>
+      <div class="footer-links">
+        <a href="https://t.me/SC199_DNEVNIK_bot" target="_blank" rel="noopener noreferrer">Telegram-бот</a>
+        <a href="/app">Веб-версия</a>
+        <a href="#faq">Частые вопросы</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<div class="toast" id="landingToast" role="status" aria-live="polite"></div>
+
+<script>
+  function updateThemeUi(theme) {
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) {
+      meta.setAttribute("content", theme === "google-dark" ? "#131314" : "#F0F4F9");
+    }
+    var icon = document.getElementById("themeToggleIcon");
+    if (icon) {
+      icon.innerHTML = theme === "google-dark"
+        ? '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>'
+        : '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>';
+    }
+  }
+
+  function applyGoogleTheme(t) {
+    var theme = t === "google-dark" ? "google-dark" : "google";
+    document.documentElement.setAttribute("data-theme", theme);
+    try {
+      localStorage.setItem("hub_google_theme", theme);
+    } catch (e) {}
+    updateThemeUi(theme);
+  }
+
+  function toggleGoogleTheme() {
+    var cur = document.documentElement.getAttribute("data-theme");
+    var next = cur === "google-dark" ? "google" : "google-dark";
+    applyGoogleTheme(next);
+    showToast(next === "google-dark" ? "Включена тёмная тема" : "Включена светлая тема");
+  }
+
+  var toastTimer = null;
+  function showToast(text) {
+    var el = document.getElementById("landingToast");
+    if (!el) return;
+    el.textContent = text;
+    el.classList.add("show");
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () {
+      el.classList.remove("show");
+    }, 2800);
+  }
+
+  function switchMockupTab(tabKey) {
+    var tabs = document.querySelectorAll(".mockup-tab");
+    var panels = document.querySelectorAll(".mockup-panel");
+    for (var i = 0; i < tabs.length; i++) {
+      var isTarget = tabs[i].getAttribute("data-tab") === tabKey;
+      tabs[i].classList.toggle("active", isTarget);
+      tabs[i].setAttribute("aria-selected", isTarget ? "true" : "false");
+    }
+    for (var j = 0; j < panels.length; j++) {
+      panels[j].classList.toggle("active", panels[j].id === "panel-" + tabKey);
+    }
+  }
+
+  (function syncInitialThemeIcon() {
+    var cur = document.documentElement.getAttribute("data-theme") || "google";
+    updateThemeUi(cur);
+  })();
+</script>
+</body>
+</html>
